@@ -91,38 +91,38 @@ const ROUND_EVENT_DECK = [
   {
     icon: "🕯️",
     badge: "突然停電",
-    detail: "包廂突然停電，只剩忽明忽暗的緊急燈，這局所有實際發生的互動感染風險 x1.6。",
+    detail: "包廂突然黑掉，大家只剩緊急燈在那邊臉對臉，這局只要真的有互動，風險直接 x1.6。",
     riskMultiplier: 1.6
   },
   {
     icon: "💦",
     badge: "香檳灑滿沙發",
-    detail: "香檳和冰塊灑得到處都是，大家手忙腳亂，這局所有實際發生的互動感染風險 +15%。",
+    detail: "香檳、冰塊、尖叫聲一起灑滿包廂，大家忙到東倒西歪，這局只要真的有互動，風險再加 15%。",
     riskBonus: 0.15
   },
   {
     icon: "🌫️",
     badge: "乾冰噴過頭",
-    detail: "乾冰機開太大，現場像迷霧副本，這局所有實際發生的互動感染風險 x1.8。",
+    detail: "乾冰機今天像失戀一樣狂噴，現場直接變迷霧副本，這局只要真的有互動，風險直接 x1.8。",
     riskMultiplier: 1.8
   },
   {
     icon: "🚨",
     badge: "火警誤鳴",
-    detail: "警報亂叫，大家全都慌了手腳，這局所有實際發生的互動感染風險 +20%。",
+    detail: "火警突然亂叫，全場手腳一起打結，這局只要真的有互動，風險再多 20%。",
     riskBonus: 0.2
   },
   {
     icon: "🎉",
     badge: "彩炮失控",
-    detail: "彩炮亂射、碎紙滿天飛，這局所有實際發生的互動感染風險 x1.5。",
+    detail: "彩炮像不用錢一樣亂噴，碎紙飛到眼睛都睜不開，這局只要真的有互動，風險直接 x1.5。",
     riskMultiplier: 1.5
   },
   {
     icon: "🛼",
     blockedActions: ["oral_condom"],
     badge: "地板太滑",
-    detail: "地板滑到像溜冰場，連站穩都很難，這局不能選「戴套口交」，而且所有實際發生的互動感染風險 +10%。",
+    detail: "地板滑到像夜店版溜冰場，連站著都像在抽卡，這局不能選「戴套口交」，而且只要真的有互動，風險再多 10%。",
     riskBonus: 0.1
   }
 ];
@@ -387,7 +387,7 @@ function clamp(value, min, max) {
 function handleCreateRoom() {
   const existing = currentProfile();
   const typedName = sanitizeName(APP.dom.hostNameInput.value);
-  const name = typedName || existing.name || "主持人";
+  const name = typedName || existing.name || "今晚主揪";
 
   const profile = {
     name,
@@ -400,7 +400,7 @@ function handleCreateRoom() {
   highlightAvatarChip(profile.avatar);
 
   if (!typedName && !existing.name) {
-    showToast("未填主持暱稱，已套用預設「主持人」。");
+    showToast("你主揪名號空著，我先幫你套上「今晚主揪」。");
   }
 
   destroyPeerState();
@@ -422,7 +422,7 @@ function attemptCreateHostPeer(profile, attempts) {
     wireHostPeer(peer);
     renderHostSnapshot();
     switchScreen("lobby-screen");
-    showToast("主持房間已建立，現在可以讓玩家掃碼加入。");
+    showToast("桌子開好啦，快把 QR Code 丟出去抓人。");
   });
 
   peer.on("error", (error) => {
@@ -431,7 +431,7 @@ function attemptCreateHostPeer(profile, attempts) {
       attemptCreateHostPeer(profile, attempts + 1);
       return;
     }
-    showToast(`建立房間失敗：${error.type || error.message}`);
+    showToast(`開桌失敗：${error.type || error.message}`);
   });
 }
 
@@ -505,18 +505,18 @@ function handleJoinSubmit(event) {
   const avatar = sanitizeAvatar(APP.selectedAvatar);
 
   if (!roomCode) {
-    showToast("請輸入有效房號。");
+    showToast("這房號像是手滑打的，重輸一次。");
     return;
   }
   if (!name) {
-    showToast("請輸入你的暱稱。");
+    showToast("先取個有記憶點的名字吧。");
     return;
   }
 
   saveStoredProfile({ name, avatar });
   destroyPeerState();
-  setJoinFormBusy(true, "正在連線…");
-  showToast("正在連線房間，請稍候。");
+  setJoinFormBusy(true, "潛入中…");
+  showToast("正在找主揪對暗號，等我一下。");
   createPlayerPeer(roomCode, { name, avatar });
 }
 
@@ -531,7 +531,7 @@ function createPlayerPeer(roomCode, profile) {
     APP.roomCode = roomCode;
     APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
     APP.playerSnapshot = null;
-    renderJoiningLobby(profile, roomCode, "正在連線");
+    renderJoiningLobby(profile, roomCode, "潛入中");
     startJoinAttemptTimeout();
     wirePlayerPeer(profile);
   });
@@ -541,7 +541,7 @@ function createPlayerPeer(roomCode, profile) {
     if (!APP.playerSnapshot) {
       switchScreen("join-screen");
     }
-    showToast(`加入房間失敗：${error.type || error.message}`);
+    showToast(`滑進包廂失敗：${error.type || error.message}`);
   });
 }
 
@@ -550,7 +550,7 @@ function wirePlayerPeer(profile) {
   APP.hostConn = conn;
 
   conn.on("open", () => {
-    renderJoiningLobby(profile, APP.roomCode, "等待主持人回應");
+    renderJoiningLobby(profile, APP.roomCode, "等主揪點頭");
     startJoinAttemptTimeout();
     conn.send({
       type: "join-request",
@@ -568,7 +568,7 @@ function wirePlayerPeer(profile) {
     if (!APP.playerSnapshot) {
       switchScreen("join-screen");
     }
-    showToast("與主持人斷線，請重新加入房間。");
+    showToast("你跟主揪斷線了，重新滑進來吧。");
   });
   conn.on("error", () => {
     clearLocalPendingState();
@@ -576,7 +576,7 @@ function wirePlayerPeer(profile) {
     if (!APP.playerSnapshot) {
       switchScreen("join-screen");
     }
-    showToast("連線中斷，請重新整理後再加入。");
+    showToast("連線突然散掉了，重新整理再衝一次。");
   });
 }
 
@@ -588,14 +588,14 @@ function handleHostMessage(conn, packet) {
   if (packet.type === "join-request") {
     const room = APP.hostRoom;
     if (!room || room.phase !== "lobby") {
-      conn.send({ type: "join-rejected", reason: "比賽已經開始，暫時無法加入。" });
+      conn.send({ type: "join-rejected", reason: "這桌已經開喝了，這局先別硬擠。" });
       conn.close();
       return;
     }
 
     const currentCount = activeLobbyPlayers(room).length;
     if (currentCount >= GAME_CONFIG.maxPlayers) {
-      conn.send({ type: "join-rejected", reason: "房間已滿。" });
+      conn.send({ type: "join-rejected", reason: "包廂爆滿啦，真的塞不下。" });
       conn.close();
       return;
     }
@@ -650,7 +650,7 @@ function handlePlayerMessage(packet) {
   if (packet.type === "join-rejected") {
     clearLocalPendingState();
     clearJoinAttemptState();
-    showToast(packet.reason || "主持人拒絕加入。");
+    showToast(packet.reason || "主揪現在不收人。");
     switchScreen("join-screen");
     return;
   }
@@ -721,10 +721,10 @@ function renderPlayerSnapshot() {
 }
 
 function renderJoiningLobby(profile, roomCode, phaseLabel) {
-  APP.dom.lobbyTitle.textContent = "正在加入房間…";
+  APP.dom.lobbyTitle.textContent = "正在滑進包廂…";
   APP.dom.phasePill.textContent = phaseLabel;
   APP.dom.roomCodeDisplay.textContent = roomCode;
-  APP.dom.joinLinkDisplay.textContent = "等待主持人確認後顯示";
+  APP.dom.joinLinkDisplay.textContent = "等主揪點頭後就會冒出來";
   APP.dom.playerCountDisplay.textContent = "…";
   APP.dom.startGameBtn.disabled = true;
   APP.dom.hostControls.classList.add("hidden");
@@ -734,9 +734,9 @@ function renderJoiningLobby(profile, roomCode, phaseLabel) {
       <div class="player-avatar">${escapeHtml(profile.avatar)}</div>
       <div class="player-meta">
         <strong>${escapeHtml(profile.name)}</strong>
-        <span>正在與主持人同步入場資料</span>
+        <span>正在跟主揪對名字跟座位</span>
       </div>
-      <span class="phase-pill subtle">連線中</span>
+      <span class="phase-pill subtle">潛入中</span>
     </article>
   `;
   switchScreen("lobby-screen");
@@ -859,8 +859,8 @@ function buildPartnerView(playerId, partnerId) {
 
 function fallbackSummary() {
   return {
-    title: "本局已結束",
-    body: "等待主持人推進下一局。",
+    title: "這局收攤",
+    body: "等主揪一聲令下再往下走。",
     chips: [],
     notes: []
   };
@@ -889,8 +889,8 @@ function renderSnapshot(snapshot) {
 }
 
 function renderLobby(snapshot) {
-  APP.dom.lobbyTitle.textContent = snapshot.role === "host" ? "等待玩家就位" : "已加入房間，等待主持人開始";
-  APP.dom.phasePill.textContent = "Lobby";
+  APP.dom.lobbyTitle.textContent = snapshot.role === "host" ? "等人到齊再開喝" : "你已卡位，等主揪發車";
+  APP.dom.phasePill.textContent = "等開桌";
   APP.dom.roomCodeDisplay.textContent = snapshot.roomCode;
   APP.dom.joinLinkDisplay.textContent = snapshot.joinLink;
   APP.dom.playerCountDisplay.textContent = String(snapshot.players.length);
@@ -912,9 +912,9 @@ function renderLobby(snapshot) {
       <div class="player-avatar">${player.avatar}</div>
       <div class="player-meta">
         <strong>${escapeHtml(player.name)}</strong>
-        <span>${player.isHost ? "主持人" : "玩家"}${player.online ? "" : " · 離線"}</span>
+        <span>${player.isHost ? "主揪" : "玩家"}${player.online ? "" : " · 掉線"}</span>
       </div>
-      <span class="phase-pill subtle">${player.online ? "已就位" : "中斷"}</span>
+      <span class="phase-pill subtle">${player.online ? "已卡位" : "斷線中"}</span>
     `;
     APP.dom.playerList.appendChild(row);
   });
@@ -962,8 +962,8 @@ function renderRound(snapshot) {
 
   if (!round.partner) {
     APP.dom.partnerAvatar.textContent = "🪑";
-    APP.dom.partnerName.textContent = "本局輪空";
-    APP.dom.partnerFlirt.textContent = "「這一局你暫時沒有配對對象。」";
+    APP.dom.partnerName.textContent = "這局放空";
+    APP.dom.partnerFlirt.textContent = "「這局先讓你喘口氣，暫時沒人跟你對到。」";
     APP.dom.partnerTags.innerHTML = "";
     setPartnerToolState(false, isLocked);
     renderActionButtonStates([], effectiveSubmission, true, Boolean(pendingUtility));
@@ -995,7 +995,7 @@ function renderPartnerTags(partner, anxiety) {
     const blurThis = shouldBlur && !tag.hidden && index % 2 === 1;
     if (tag.hidden || blurThis) {
       badge.className = "tag tag-hidden";
-      badge.innerHTML = `<span class="icon">❓</span><span>${blurThis ? "視線模糊" : "隱藏資訊"}</span>`;
+      badge.innerHTML = `<span class="icon">❓</span><span>${blurThis ? "眼神開始飄" : "還沒套出來"}</span>`;
     } else {
       badge.className = `tag ${tagClassName(tag.color)}`;
       badge.innerHTML = `<span class="icon">${tagIcon(tag.color)}</span><span>${escapeHtml(tag.text)}</span>`;
@@ -1006,14 +1006,14 @@ function renderPartnerTags(partner, anxiety) {
   if (partner.testedResult) {
     const testBadge = document.createElement("div");
     testBadge.className = `tag ${partner.testedResult.infected ? "tag-tested-positive" : "tag-tested-negative"}`;
-    testBadge.innerHTML = `<span class="icon">${partner.testedResult.infected ? "🧪" : "🛡️"}</span><span>${partner.testedResult.infected ? "試紙結果：陽性" : "試紙結果：陰性"}</span>`;
+    testBadge.innerHTML = `<span class="icon">${partner.testedResult.infected ? "🧪" : "🛡️"}</span><span>${partner.testedResult.infected ? "試紙爆燈：陽性" : "試紙很安靜：陰性"}</span>`;
     APP.dom.partnerTags.appendChild(testBadge);
   }
 
   if (partner.roundNotice) {
     const eventBadge = document.createElement("div");
     eventBadge.className = "tag tag-risk-soft";
-    eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.roundNotice.icon || "🎲")}</span><span>${escapeHtml(`本局鬧場：${partner.roundNotice.badge}`)}</span>`;
+    eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.roundNotice.icon || "🎲")}</span><span>${escapeHtml(`亂入事件：${partner.roundNotice.badge}`)}</span>`;
     APP.dom.partnerTags.appendChild(eventBadge);
   }
 }
@@ -1049,33 +1049,33 @@ function updateSubmissionCard(submission, partner, pendingUtility, noPartner) {
   if (submission) {
     APP.dom.submittedActionLabel.textContent = ACTIONS[submission].shortLabel;
     APP.dom.submissionHint.textContent = APP.localPending.submission && !APP.playerSnapshot?.round?.submission
-      ? "正在送出你的選擇…"
-      : "本局已提交，請等待主持人結算。";
+      ? "你的選擇正飛去主揪那邊…"
+      : "你已鎖牌，等主揪翻牌。";
     return;
   }
   if (pendingUtility) {
     APP.dom.submittedActionLabel.textContent = pendingUtility.label;
-    APP.dom.submissionHint.textContent = "正在同步你的操作，請稍候。";
+    APP.dom.submissionHint.textContent = "動作送出了，先別急著亂按。";
     return;
   }
   if (noPartner) {
-    APP.dom.submittedActionLabel.textContent = "本局可略過";
-    APP.dom.submissionHint.textContent = "輪空局不需提交互動選擇；若想確認自身狀態，仍可去醫院檢查。";
+    APP.dom.submittedActionLabel.textContent = "這局可放空";
+    APP.dom.submissionHint.textContent = "這局沒配到人，你可以發呆；想驗身還是能跑醫院。";
     return;
   }
-  APP.dom.submittedActionLabel.textContent = "尚未提交";
+  APP.dom.submittedActionLabel.textContent = "還沒拍板";
   APP.dom.submissionHint.textContent = partner
-    ? `${partner.roundNotice ? `鬧場事件：${partner.roundNotice.detail} ` : ""}若倒數結束仍未提交，系統會自動判定為「換一個」。`
-    : "輪空局無需提交，等待其他玩家完成。";
+    ? `${partner.roundNotice ? `亂入事件：${partner.roundNotice.detail} ` : ""}倒數跑完還沒選，遊戲就會幫你自動「換下一位」。`
+    : "這局放空就好，等其他人把戲演完。";
 }
 
 function startCountdown(deadlineAt, progress, isHost) {
   clearInterval(APP.countdownTimer);
   const update = () => {
     const remaining = Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000));
-    const timeLabel = remaining > 0 ? `剩餘 ${remaining} 秒` : "主持人正在結算";
+    const timeLabel = remaining > 0 ? `還有 ${remaining} 秒` : "主揪正在翻牌";
     if (isHost && progress?.totalCount) {
-      APP.dom.timerPill.textContent = `${timeLabel} · ${progress.submittedCount}/${progress.totalCount} 已交`;
+      APP.dom.timerPill.textContent = `${timeLabel} · ${progress.submittedCount}/${progress.totalCount} 已出牌`;
       return;
     }
     APP.dom.timerPill.textContent = timeLabel;
@@ -1086,15 +1086,15 @@ function startCountdown(deadlineAt, progress, isHost) {
 
 function describeRolePill(self) {
   if (self.isCarrier) {
-    return "你是初始帶原者";
+    return "你就是開場那 6 個帶原者之一";
   }
   if (self.detectedSelf && self.detectedInfected) {
-    return "醫院已確認感染";
+    return "醫院說：你中獎了";
   }
   if (self.detectedSelf && !self.detectedInfected) {
-    return "醫院確認目前健康";
+    return "醫院說：你目前安全";
   }
-  return "你起始是健康人，狀態未檢查";
+  return "你開場是健康人，還沒去驗";
 }
 
 function renderSummary(snapshot) {
@@ -1102,7 +1102,7 @@ function renderSummary(snapshot) {
   APP.dom.summaryTitle.textContent = snapshot.summary.private.title;
   APP.dom.summaryBody.textContent = snapshot.summary.private.body;
   APP.dom.summaryExtra.innerHTML = "";
-  APP.dom.summaryPhasePill.textContent = "Summary";
+  APP.dom.summaryPhasePill.textContent = "這局翻牌";
 
   snapshot.summary.private.chips.forEach((chip) => {
     const badge = document.createElement("div");
@@ -1127,12 +1127,12 @@ function renderSummary(snapshot) {
 
   const isHost = snapshot.role === "host";
   APP.dom.hostNextRoundBtn.classList.toggle("hidden", !isHost);
-  APP.dom.hostNextRoundBtn.textContent = snapshot.summary.isFinalRound ? "揭曉終局頒獎" : "主持人推進下一局";
+  APP.dom.hostNextRoundBtn.textContent = snapshot.summary.isFinalRound ? "直接開獎去" : "下一局，走起";
 }
 
 function renderAwards(snapshot) {
   clearInterval(APP.countdownTimer);
-  APP.dom.awardsTitle.textContent = "派對頒獎典禮";
+  APP.dom.awardsTitle.textContent = "今晚頒獎台";
   APP.dom.finaleHeading.textContent = snapshot.finale.heading;
   APP.dom.finaleBody.textContent = snapshot.finale.body;
   APP.dom.podiumStage.innerHTML = "";
@@ -1172,8 +1172,8 @@ function copyJoinLink() {
     return;
   }
   navigator.clipboard.writeText(link)
-    .then(() => showToast("加入連結已複製。"))
-    .catch(() => showToast("複製失敗，請手動複製畫面上的連結。"));
+    .then(() => showToast("進場連結複製好了，快丟群組。"))
+    .catch(() => showToast("複製失敗，只好手動抄一下。"));
 }
 
 function startHostedGame() {
@@ -1184,7 +1184,7 @@ function startHostedGame() {
 
   const lobbyPlayers = activeLobbyPlayers(room);
   if (lobbyPlayers.length < GAME_CONFIG.minPlayers) {
-    showToast(`至少需要 ${GAME_CONFIG.minPlayers} 人才能開始。`);
+    showToast(`至少先湊到 ${GAME_CONFIG.minPlayers} 個人才夠熱鬧。`);
     return;
   }
 
@@ -1421,7 +1421,7 @@ function handleChatReveal() {
     return;
   }
   if (APP.hostConn?.open) {
-    setLocalPendingUtility("chat", "正在試探…");
+    setLocalPendingUtility("chat", "正在套話…");
     APP.hostConn.send({ type: "chat-reveal" });
   }
 }
@@ -1438,14 +1438,14 @@ function hostRevealTag(playerId) {
   const privateState = room.round.private[playerId];
   const nextHidden = privateState.hiddenIndices.find((index) => !privateState.revealedIndices.includes(index));
   if (nextHidden === undefined) {
-    sendPrivateToast(playerId, "沒有更多隱藏資訊可揭露了。");
+    sendPrivateToast(playerId, "你已經把能套的都套光了。");
     return;
   }
   privateState.revealedIndices.push(nextHidden);
   room.players[playerId].stats.chats += 1;
   const partnerId = room.round.pairMap[playerId];
   const tag = APP.hostRoom.players[partnerId].persona.tags[nextHidden];
-  sendPrivateToast(playerId, `你試探出了一條新線索：${tag.text}`);
+  sendPrivateToast(playerId, `你嘴到一條新線索：${tag.text}`);
   hostSyncAll();
 }
 
@@ -1458,7 +1458,7 @@ function handleUseTestkit() {
     return;
   }
   if (APP.hostConn?.open) {
-    setLocalPendingUtility("testkit", "正在檢測…");
+    setLocalPendingUtility("testkit", "正在偷測…");
     APP.hostConn.send({ type: "use-testkit" });
   }
 }
@@ -1473,12 +1473,12 @@ function hostUseTestkit(playerId) {
     return;
   }
   if (player.testkits < 1) {
-    sendPrivateToast(playerId, "你的對方試紙已經用完了。");
+    sendPrivateToast(playerId, "你的偷驗機會已經用光啦。");
     return;
   }
   const partnerId = room.round.pairMap[playerId];
   if (!partnerId) {
-    sendPrivateToast(playerId, "本局沒有配對對象，無法檢測。");
+    sendPrivateToast(playerId, "這局沒對到人，沒地方偷測。");
     return;
   }
   player.testkits -= 1;
@@ -1486,7 +1486,7 @@ function hostUseTestkit(playerId) {
   room.round.private[playerId].testedResult = {
     infected: room.players[partnerId].isInfected
   };
-  sendPrivateToast(playerId, room.players[partnerId].isInfected ? "試紙顯示陽性反應。" : "試紙顯示陰性反應。");
+  sendPrivateToast(playerId, room.players[partnerId].isInfected ? "試紙爆燈：陽性。" : "試紙很安靜：陰性。");
   hostSyncAll();
 }
 
@@ -1519,7 +1519,7 @@ function hostReceiveAction(playerId, actionKey) {
       return;
     }
     room.round.submissions[playerId] = "hospital";
-    sendPrivateToast(playerId, `已提交：${ACTIONS.hospital.shortLabel}`);
+    sendPrivateToast(playerId, `已鎖牌：${ACTIONS.hospital.shortLabel}`);
     hostSyncAll();
     return;
   }
@@ -1527,7 +1527,7 @@ function hostReceiveAction(playerId, actionKey) {
   const allowedActions = getAllowedActionsForPlayer(playerId);
   const finalAction = allowedActions.includes(actionKey) ? actionKey : "refuse";
   room.round.submissions[playerId] = finalAction;
-  sendPrivateToast(playerId, `已提交：${ACTIONS[finalAction].shortLabel}`);
+  sendPrivateToast(playerId, `已鎖牌：${ACTIONS[finalAction].shortLabel}`);
 
   if (allRoundActionsSubmitted()) {
     resolveHostedRound();
@@ -1569,20 +1569,20 @@ function resolveHostedRound() {
         applyHospital(player);
         publicCounter.hospitalVisits += 1;
         privateSummaries[playerId] = {
-          title: `第 ${room.roundIndex} 局結束`,
+          title: `第 ${room.roundIndex} 局翻牌`,
           body: player.isInfected
-            ? "你在輪空局選擇去醫院檢查，檢驗結果確認你已經感染。"
-            : "你在輪空局選擇去醫院檢查，檢驗結果顯示你目前仍然健康。",
-          chips: [{ label: player.isInfected ? "確認感染" : "確認健康", kind: player.isInfected ? "bad" : "good" }],
-          notes: ["醫院會清空你的焦慮值，但衝動值會明顯上升。"]
+            ? "你這局雖然放空，還是跑去醫院驗了一下，結果是你真的中獎了。"
+            : "你這局雖然放空，還是跑去醫院驗了一下，結果目前還安全。",
+          chips: [{ label: player.isInfected ? "真的中獎" : "目前安全", kind: player.isInfected ? "bad" : "good" }],
+          notes: ["醫院會讓你瞬間清醒，但回來只會更想玩。"]
         };
         return;
       }
       privateSummaries[playerId] = {
-        title: `第 ${room.roundIndex} 局結束`,
-        body: "你本局輪空，沒有發生任何互動。",
-        chips: [{ label: "輪空", kind: "warn" }],
-        notes: ["輪空局不會強迫你提交互動，也無法靠這一局累積親密次數。"]
+        title: `第 ${room.roundIndex} 局翻牌`,
+        body: "你這局剛好空窗，什麼都沒發生。",
+        chips: [{ label: "放空一局", kind: "warn" }],
+        notes: ["空窗局不會逼你出牌，但也刷不到親密次數。"]
       };
     }
   });
@@ -1617,11 +1617,11 @@ function resolveHostedRound() {
   room.summary = {
     private: privateSummaries,
     publicStats: [
-      { label: "本局發生的親密互動", value: `${publicCounter.intimateEvents} 次` },
-      { label: "高風險無套互動", value: `${publicCounter.riskyEvents} 次` },
-      { label: "醫院檢查次數", value: `${publicCounter.hospitalVisits} 次` },
-      { label: "不可抗力增風險互動", value: `${publicCounter.forceMajeureSurges} 次` },
-      { label: "尚未有親密經驗的人數", value: `${publicCounter.noExperiencePlayers} 人` }
+      { label: "這局真的有擦出火花", value: `${publicCounter.intimateEvents} 次` },
+      { label: "高風險放飛互動", value: `${publicCounter.riskyEvents} 次` },
+      { label: "跑去醫院冷靜的人", value: `${publicCounter.hospitalVisits} 次` },
+      { label: "被亂入事件加碼的互動", value: `${publicCounter.forceMajeureSurges} 次` },
+      { label: "到現在還沒開張的人", value: `${publicCounter.noExperiencePlayers} 人` }
     ]
   };
   room.phase = "summary";
@@ -1632,8 +1632,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
   const room = APP.hostRoom;
   const left = room.players[leftId];
   const right = room.players[rightId];
-  const leftSummary = { title: `第 ${roundIndex} 局結束`, body: "", chips: [], notes: [] };
-  const rightSummary = { title: `第 ${roundIndex} 局結束`, body: "", chips: [], notes: [] };
+  const leftSummary = { title: `第 ${roundIndex} 局翻牌`, body: "", chips: [], notes: [] };
+  const rightSummary = { title: `第 ${roundIndex} 局翻牌`, body: "", chips: [], notes: [] };
   const publicStats = {
     intimateEvents: 0,
     riskyEvents: 0,
@@ -1645,20 +1645,20 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyHospital(left);
     publicStats.hospitalVisits += 1;
     leftSummary.body = left.isInfected
-      ? "你本局選擇去醫院檢查，檢驗結果確認你已經感染。"
-      : "你本局選擇去醫院檢查，檢驗結果顯示你目前仍然健康。";
-    leftSummary.chips.push({ label: left.isInfected ? "確認感染" : "確認健康", kind: left.isInfected ? "bad" : "good" });
-    leftSummary.notes.push("醫院會清空你的焦慮值，但衝動值會明顯上升。");
+      ? "你這局先衝去醫院，翻牌答案是：你真的中獎了。"
+      : "你這局先衝去醫院，翻牌答案是：你目前還安全。";
+    leftSummary.chips.push({ label: left.isInfected ? "真的中獎" : "目前安全", kind: left.isInfected ? "bad" : "good" });
+    leftSummary.notes.push("醫院會讓你瞬間清醒，但回來只會更想玩。");
   }
 
   if (rightActionKey === "hospital") {
     applyHospital(right);
     publicStats.hospitalVisits += 1;
     rightSummary.body = right.isInfected
-      ? "你本局選擇去醫院檢查，檢驗結果確認你已經感染。"
-      : "你本局選擇去醫院檢查，檢驗結果顯示你目前仍然健康。";
-    rightSummary.chips.push({ label: right.isInfected ? "確認感染" : "確認健康", kind: right.isInfected ? "bad" : "good" });
-    rightSummary.notes.push("醫院會清空你的焦慮值，但衝動值會明顯上升。");
+      ? "你這局先衝去醫院，翻牌答案是：你真的中獎了。"
+      : "你這局先衝去醫院，翻牌答案是：你目前還安全。";
+    rightSummary.chips.push({ label: right.isInfected ? "真的中獎" : "目前安全", kind: right.isInfected ? "bad" : "good" });
+    rightSummary.notes.push("醫院會讓你瞬間清醒，但回來只會更想玩。");
   }
 
   const leftIntimacy = isIntimacyAction(leftActionKey);
@@ -1668,32 +1668,32 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
   if (blocked) {
     if (leftActionKey === "refuse") {
       applyRefuse(left, right);
-      leftSummary.body = `你選擇與 ${right.name} 保持距離，這一局沒有發生親密互動。`;
-      leftSummary.chips.push({ label: right.isInfected ? "成功避開風險" : "主動離場", kind: right.isInfected ? "good" : "warn" });
+      leftSummary.body = `你決定跟 ${right.name} 保持距離，這局直接不接球。`;
+      leftSummary.chips.push({ label: right.isInfected ? "閃得漂亮" : "自己先撤", kind: right.isInfected ? "good" : "warn" });
       if (right.isInfected) {
         left.stats.correctLeaves += 1;
       }
     } else if (!leftSummary.body) {
       applyFailedAttempt(left);
-      leftSummary.body = `${right.name} 沒有配合你的節奏，這一局的親密互動落空了。`;
-      leftSummary.chips.push({ label: "互動落空", kind: "warn" });
+      leftSummary.body = `${right.name} 完全沒接你的節奏，這局直接變空氣球。`;
+      leftSummary.chips.push({ label: "直接撲空", kind: "warn" });
     }
 
     if (rightActionKey === "refuse") {
       applyRefuse(right, left);
-      rightSummary.body = `你選擇與 ${left.name} 保持距離，這一局沒有發生親密互動。`;
-      rightSummary.chips.push({ label: left.isInfected ? "成功避開風險" : "主動離場", kind: left.isInfected ? "good" : "warn" });
+      rightSummary.body = `你決定跟 ${left.name} 保持距離，這局直接不接球。`;
+      rightSummary.chips.push({ label: left.isInfected ? "閃得漂亮" : "自己先撤", kind: left.isInfected ? "good" : "warn" });
       if (left.isInfected) {
         right.stats.correctLeaves += 1;
       }
     } else if (!rightSummary.body) {
       applyFailedAttempt(right);
-      rightSummary.body = `${left.name} 沒有配合你的節奏，這一局的親密互動落空了。`;
-      rightSummary.chips.push({ label: "互動落空", kind: "warn" });
+      rightSummary.body = `${left.name} 完全沒接你的節奏，這局直接變空氣球。`;
+      rightSummary.chips.push({ label: "直接撲空", kind: "warn" });
     }
 
-    leftSummary.notes.push("若終局前都沒有任何一次親密互動，你會直接判定失敗。");
-    rightSummary.notes.push("若終局前都沒有任何一次親密互動，你會直接判定失敗。");
+    leftSummary.notes.push("提醒一下，玩到最後如果一次都沒下場，遊戲會直接說你根本來觀光。");
+    rightSummary.notes.push("提醒一下，玩到最後如果一次都沒下場，遊戲會直接說你根本來觀光。");
     return { left: leftSummary, right: rightSummary, public: publicStats };
   }
 
@@ -1726,30 +1726,30 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyIntimacy(left, resolvedActionKey, leftPartnerWasInfected);
     applyIntimacy(right, resolvedActionKey, rightPartnerWasInfected);
 
-    leftSummary.body = `你和 ${right.name} 的互動最後落在「${resolvedAction.shortLabel}」。衝動值下降，但焦慮值同步上升。`;
-    rightSummary.body = `你和 ${left.name} 的互動最後落在「${resolvedAction.shortLabel}」。衝動值下降，但焦慮值同步上升。`;
+    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。上頭值掉了點，但心裡也更七上八下。`;
+    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。上頭值掉了點，但心裡也更七上八下。`;
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
 
     if (forceMajeureRisk && riskContext.roundNotice) {
-      leftSummary.chips.push({ label: "不可抗力增風險", kind: "warn" });
-      rightSummary.chips.push({ label: "不可抗力增風險", kind: "warn" });
-      leftSummary.notes.push(`本局鬧場事件「${riskContext.roundNotice.badge}」讓實際互動的感染風險比平常更高。`);
-      rightSummary.notes.push(`本局鬧場事件「${riskContext.roundNotice.badge}」讓實際互動的感染風險比平常更高。`);
+      leftSummary.chips.push({ label: "亂入加碼風險", kind: "warn" });
+      rightSummary.chips.push({ label: "亂入加碼風險", kind: "warn" });
+      leftSummary.notes.push(`這局碰上「${riskContext.roundNotice.badge}」，現場一亂，風險也跟著亂飛。`);
+      rightSummary.notes.push(`這局碰上「${riskContext.roundNotice.badge}」，現場一亂，風險也跟著亂飛。`);
     }
 
     if (!leftInfectedBefore && left.isInfected && !left.detectedSelf) {
-      leftSummary.notes.push("你沒有立刻察覺任何結果。若想確認自己是否安全，醫院才是唯一準確答案。");
+      leftSummary.notes.push("你現在不一定馬上感覺得到什麼，但真想知道答案，還是得靠醫院翻牌。");
     } else if (leftPartnerWasInfected && !left.isInfected) {
       left.stats.closeCalls += 1;
-      leftSummary.notes.push("這次互動其實很驚險，但你暫時沒有明顯異狀。");
+      leftSummary.notes.push("這波其實擦身得很驚險，但你暫時還沒看到明顯異狀。");
     }
 
     if (!rightInfectedBefore && right.isInfected && !right.detectedSelf) {
-      rightSummary.notes.push("你沒有立刻察覺任何結果。若想確認自己是否安全，醫院才是唯一準確答案。");
+      rightSummary.notes.push("你現在不一定馬上感覺得到什麼，但真想知道答案，還是得靠醫院翻牌。");
     } else if (rightPartnerWasInfected && !right.isInfected) {
       right.stats.closeCalls += 1;
-      rightSummary.notes.push("這次互動其實很驚險，但你暫時沒有明顯異狀。");
+      rightSummary.notes.push("這波其實擦身得很驚險，但你暫時還沒看到明顯異狀。");
     }
 
     return { left: leftSummary, right: rightSummary, public: publicStats };
@@ -1848,28 +1848,28 @@ function finalizeHostedGame() {
 
   players.forEach((player) => {
     let kind = "lose";
-    let label = "未過關";
-    let detail = `親密 ${player.intimacyCount} 次，最終 ${player.isInfected ? "感染" : "健康"}`;
+    let label = "今晚翻車";
+    let detail = `演了 ${player.intimacyCount} 次，最後狀態是${player.isInfected ? "感染" : "健康"}。`;
 
     if (player.intimacyCount === 0) {
       kind = "lose";
-      label = "零互動失敗";
-      detail = "終局前從未有過親密互動，直接判定失敗。";
+      label = "全程觀望王";
+      detail = "你一路看到最後都沒真正下場，遊戲直接判你白來。";
     } else if (healthyWinners.some((winner) => winner.id === player.id)) {
       kind = "winner";
-      label = "健康倖存者";
-      detail = `完成 ${player.intimacyCount} 次互動後仍保持健康。`;
+      label = "健康倖存王";
+      detail = `演了 ${player.intimacyCount} 次還能全身而退，真的有兩把刷子。`;
     } else if (everyoneInfected && player.isCarrier) {
       kind = "carrier";
-      label = "帶原者陣營獲勝";
-      detail = `初始帶原者之一，成功達成全面感染。`;
+      label = "帶原者笑到最後";
+      detail = "你是開局那批帶原者之一，最後真的把全場帶歪了。";
     } else if (player.isCarrier) {
       kind = "lose";
-      label = "帶原者失敗";
-      detail = `最終仍有健康者存活，帶原者陣營未能達標。`;
+      label = "帶原者差一口氣";
+      detail = "最後還有人全身而退，這桌沒有被你們徹底帶壞。";
     } else {
       kind = "lose";
-      label = player.isInfected ? "終局感染" : "未達通關條件";
+      label = player.isInfected ? "終局中標" : "差一點就成神";
     }
 
     finalResults[player.id] = {
@@ -1890,14 +1890,14 @@ function buildFinale(players, healthyWinners, everyoneInfected, finalResults) {
   let body = "";
 
   if (healthyWinners.length > 0) {
-    heading = "健康倖存者獲勝";
-    body = `本場共有 ${healthyWinners.length} 位玩家在完成至少一次親密互動後，仍成功維持健康狀態。`;
+    heading = "健康倖存者笑到最後";
+    body = `今晚有 ${healthyWinners.length} 位玩家不是來觀光的，真的下場後還能全身而退。`;
   } else if (everyoneInfected) {
-    heading = "全面感染，帶原者獲勝";
-    body = "終局時全場皆已感染，初始 6 位帶原者成功完成陣營目標。";
+    heading = "全場淪陷，帶原者開香檳";
+    body = "收官時全場通通中標，開局那 6 位帶原者把這桌徹底帶歪。";
   } else {
-    heading = "無人完美過關";
-    body = "雖然沒有任何健康倖存者，但也未達成全面感染，這是一場兩敗俱傷的派對。";
+    heading = "沒人完美收工";
+    body = "雖然沒有倖存王，但也沒全場淪陷，大家今晚算是各有各的翻車。";
   }
 
   const podium = buildPodium(players, healthyWinners, everyoneInfected, finalResults);
@@ -1914,7 +1914,7 @@ function buildFinale(players, healthyWinners, everyoneInfected, finalResults) {
       avatar: player.avatar,
       name: player.name,
       label: finalResults[player.id].label,
-      detail: `${finalResults[player.id].detail} 傳播 ${player.transmissionCount} 次。`,
+      detail: `${finalResults[player.id].detail} 還順手傳了 ${player.transmissionCount} 次。`,
       kind: finalResults[player.id].kind
     }));
 
@@ -1945,31 +1945,31 @@ function buildPodium(players, healthyWinners, everyoneInfected, finalResults) {
       .sort((left, right) => right.transmissionCount - left.transmissionCount)[0];
     entries.push({
       avatar: bestCarrier?.avatar || "🦠",
-      playerName: bestCarrier?.name || "帶原者",
-      title: "全面感染 MVP",
-      subtitle: bestCarrier ? `成功傳播 ${bestCarrier.transmissionCount} 次` : "帶原者陣營奪勝"
+      playerName: bestCarrier?.name || "帶原者本人",
+      title: "今晚最會帶節奏",
+      subtitle: bestCarrier ? `一口氣帶飛 ${bestCarrier.transmissionCount} 次` : "帶原者今晚真的贏麻了"
     });
   } else {
     entries.push({
       avatar: safest?.avatar || "✨",
-      playerName: safest?.name || "健康倖存者",
-      title: "終局倖存王",
-      subtitle: safest ? `完成 ${safest.intimacyCount} 次互動仍健康` : "本場沒有健康倖存者"
+      playerName: safest?.name || "倖存本人",
+      title: "全身而退王",
+      subtitle: safest ? `演了 ${safest.intimacyCount} 次還是沒翻車` : "今晚沒人能乾淨收工"
     });
   }
 
   entries.push({
     avatar: spreader?.avatar || "🔥",
-    playerName: spreader?.name || "高風險玩家",
-    title: "風險擴散王",
-    subtitle: spreader ? `累計傳播 ${spreader.transmissionCount} 次` : "本場無有效傳播"
+    playerName: spreader?.name || "高風險本尊",
+    title: "帶風向散播王",
+    subtitle: spreader ? `一路帶出 ${spreader.transmissionCount} 次傳播` : "今晚大家居然都還算克制"
   });
 
   entries.push({
     avatar: social?.avatar || "🎉",
-    playerName: social?.name || "派對玩家",
-    title: "社交風雲人物",
-    subtitle: social ? `共完成 ${social.intimacyCount} 次互動` : "等待下次派對"
+    playerName: social?.name || "派對本人",
+    title: "今晚最忙的人",
+    subtitle: social ? `全場跑了 ${social.intimacyCount} 次互動` : "下次再來刷存在感"
   });
 
   return entries;
@@ -2072,7 +2072,7 @@ function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-function setJoinFormBusy(isBusy, label = "加入房間") {
+function setJoinFormBusy(isBusy, label = "我要入桌") {
   APP.dom.joinSubmitBtn.disabled = isBusy;
   APP.dom.joinSubmitBtn.textContent = label;
   APP.dom.joinBackBtn.disabled = isBusy;
@@ -2091,7 +2091,7 @@ function startJoinAttemptTimeout() {
     }
     destroyPeerState();
     switchScreen("join-screen");
-    showToast("加入房間逾時，請確認房號或稍後再試。");
+    showToast("滑進包廂超時了，檢查一下房號再試一次。");
   }, 12000);
 }
 

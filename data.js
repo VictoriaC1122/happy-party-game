@@ -34,7 +34,7 @@ const ACTIONS = {
     desireReward: 6,
     anxietyGain: 2,
     transmissionRisk: 0.05,
-    description: "收益偏低，安全感最高。"
+    description: "先試水溫，穩穩來不硬衝。"
   },
   sex_condom: {
     key: "sex_condom",
@@ -45,7 +45,7 @@ const ACTIONS = {
     desireReward: 10,
     anxietyGain: 5,
     transmissionRisk: 0.15,
-    description: "收益穩定，風險仍然存在。"
+    description: "中規中矩，但至少還沒把理智丟掉。"
   },
   oral_raw: {
     key: "oral_raw",
@@ -56,7 +56,7 @@ const ACTIONS = {
     desireReward: 12,
     anxietyGain: 15,
     transmissionRisk: 0.3,
-    description: "當下看似划算，但焦慮會快速升高。"
+    description: "當下很敢，事後通常比較會想很多。"
   },
   sex_raw: {
     key: "sex_raw",
@@ -67,7 +67,7 @@ const ACTIONS = {
     desireReward: 22,
     anxietyGain: 30,
     transmissionRisk: 0.6,
-    description: "回報最高，也最容易讓整局失控。"
+    description: "這招最猛，也最像在跟命運猜拳。"
   },
   refuse: {
     key: "refuse",
@@ -78,7 +78,7 @@ const ACTIONS = {
     desireReward: 0,
     anxietyGain: 0,
     transmissionRisk: 0,
-    description: "直接離場，保住風險但累積衝動。"
+    description: "不陪了先撤，讓腦袋保住一點。"
   },
   hospital: {
     key: "hospital",
@@ -89,7 +89,7 @@ const ACTIONS = {
     desireReward: 0,
     anxietyGain: 0,
     transmissionRisk: 0,
-    description: "清空焦慮，並得知自己目前的感染狀態。"
+    description: "去把腦袋洗清醒，順便看自己有沒有中獎。"
   }
 };
 
@@ -99,18 +99,18 @@ const AVATARS = [
 ];
 
 const FLIRT_LINES = [
-  "今晚去你家，還是我家？",
-  "別說話，先靠近一點。",
-  "我可是很挑的，你得讓我有興趣。",
-  "聽說你很會玩，真的假的？",
-  "關了燈，大家都差不多。",
-  "今晚不想一個人睡。",
-  "你看起來……有點危險，也有點誘人。",
-  "要不要試試更刺激一點的？",
-  "長夜漫漫，總得找點事情做。",
-  "別害羞，再靠近一點。",
-  "我的耐心不是無限的。",
-  "敢不敢跟我賭一把？"
+  "你站那麼近，是想讓我先笑還是先心動？",
+  "先別裝正經，今晚大家都不是來背課文的。",
+  "你看起來像會惹事的人，我有點想知道會多惹事。",
+  "你是自己走過來的，還是氣氛把你推過來的？",
+  "先說好，我今天的理智沒有帶很多。",
+  "你再靠近一點，我就當你已經答應一半。",
+  "今晚不一定要乖，但至少要有趣。",
+  "你那個眼神很像要出事，我先記一下。",
+  "別站那麼遠，像在排隊買鹹酥雞。",
+  "你是危險，還是只是很會包裝？",
+  "不如我們直接跳過尷尬，自然發瘋。",
+  "敢不敢陪我把今晚玩得有點離譜？"
 ];
 
 const TAG_POOL = [
