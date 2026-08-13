@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快樂酒局派對遊戲</title>
+  <meta name="description" content="主持人開房、掃碼加入、最多 40 人同步遊玩的繁體中文版派對風險模擬遊戲。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chiron+Hei+HK:wght@400;500;700;800&family=DM+Sans:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="backdrop"></div>
+  <div class="noise"></div>
+
+  <main class="app-shell">
+    <header class="hero-card">
+      <div>
+        <p class="eyebrow">多人派對改編版</p>
+        <h1>快樂酒局派對遊戲</h1>
+        <p class="hero-copy">
+          改編自原作的風險模擬節奏，重構成主持人可控場、掃碼加入、最多 40 人同步參與的現場派對版本。
+        </p>
+      </div>
+      <div class="hero-meta">
+        <span class="meta-pill">繁體中文</span>
+        <span class="meta-pill">40 人上限</span>
+        <span class="meta-pill">7 局制</span>
+      </div>
+    </header>
+
+    <section id="consent-screen" class="panel screen active">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">入場前聲明</p>
+          <h2>請先閱讀再開始</h2>
+        </div>
+      </div>
+      <div class="stack">
+        <article class="notice-card">
+          <h3>閱讀提醒</h3>
+          <p>建議 18 歲以上玩家參與。本作為虛構的健康風險與社交判斷模擬，不鼓勵、不美化高風險行為，也不提供任何真人交友、配對、交易或外站導流。</p>
+        </article>
+        <article class="notice-card">
+          <h3>內容邊界</h3>
+          <p>本頁不需要下載 App、填寫個資、支付費用或跳轉站外連結。若你看到任何要求輸入帳號、下載安裝包或付款的頁面，請直接離開。</p>
+        </article>
+        <article class="notice-card">
+          <h3>多人版規則摘要</h3>
+          <p>主持人開局後，系統會從全體玩家中隨機指定 6 位帶原者。所有人都要在有限局數內做判斷、承擔風險、完成至少一次親密互動，最後才揭曉結果。</p>
+        </article>
+      </div>
+      <label class="consent-box">
+        <input id="consent-checkbox" type="checkbox">
+        <span>我已閱讀並理解：本作僅供非營利風險模擬與派對互動使用，不作為鼓勵危險行為或提供任何真實交友用途。</span>
+      </label>
+      <div class="actions-row">
+        <button id="consent-continue" class="primary-btn" disabled>我已知悉，進入遊戲</button>
+      </div>
+    </section>
+
+    <section id="mode-screen" class="panel screen hidden">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">進入方式</p>
+          <h2>選擇你的身份</h2>
+        </div>
+      </div>
+      <div class="mode-grid">
+        <article class="mode-card">
+          <p class="mode-icon">🎤</p>
+          <h3>我是主持人</h3>
+          <p>建立房間、產生 QR Code、等待玩家加入，並在適當時機開局與推進每一局。</p>
+          <button id="create-room-btn" class="primary-btn">建立主持房間</button>
+        </article>
+        <article class="mode-card">
+          <p class="mode-icon">📱</p>
+          <h3>我是玩家</h3>
+          <p>輸入房號或直接掃描主持人的 QR Code 進場，設定暱稱後等待主持人開始。</p>
+          <button id="goto-join-btn" class="secondary-btn">輸入房號加入</button>
+        </article>
+        <article class="mode-card">
+          <p class="mode-icon">📖</p>
+          <h3>規則摘要</h3>
+          <ul class="plain-list compact">
+            <li>全局共 7 局，最多 40 人同場。</li>
+            <li>開局隨機抽出 6 位帶原者。</li>
+            <li>若終局時你從未有過親密互動，直接判定失敗。</li>
+            <li>若最後仍有人保持健康，那些健康者獲勝。</li>
+            <li>若所有人最終都感染，原始 6 位帶原者獲勝。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="join-screen" class="panel screen hidden">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">玩家加入</p>
+          <h2>輸入房號與暱稱</h2>
+        </div>
+        <button id="join-back-btn" class="text-btn">返回</button>
+      </div>
+      <form id="join-form" class="stack">
+        <label class="field">
+          <span>房號</span>
+          <input id="room-code-input" type="text" maxlength="8" placeholder="例如 HJ7Q2A" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>暱稱</span>
+          <input id="player-name-input" type="text" maxlength="18" placeholder="輸入你的派對暱稱" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>頭像</span>
+          <div id="avatar-picker" class="avatar-picker"></div>
+        </label>
+        <div class="actions-row">
+          <button type="submit" class="primary-btn">加入房間</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="lobby-screen" class="panel screen hidden">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">房間大廳</p>
+          <h2 id="lobby-title">等待玩家就位</h2>
+        </div>
+        <span id="phase-pill" class="phase-pill">Lobby</span>
+      </div>
+      <div class="lobby-grid">
+        <article class="notice-card">
+          <h3>房間資訊</h3>
+          <div class="info-pair">
+            <span>房號</span>
+            <strong id="room-code-display">------</strong>
+          </div>
+          <div class="info-pair">
+            <span>加入連結</span>
+            <strong id="join-link-display">建立房間後顯示</strong>
+          </div>
+          <div id="qr-wrap" class="qr-wrap hidden">
+            <div id="qr-code"></div>
+            <p>掃碼即可加入</p>
+          </div>
+          <div class="actions-row" id="host-controls">
+            <button id="copy-link-btn" class="secondary-btn">複製連結</button>
+            <button id="start-game-btn" class="primary-btn" disabled>主持人開始</button>
+          </div>
+        </article>
+
+        <article class="notice-card">
+          <h3>本場設定</h3>
+          <ul class="plain-list compact">
+            <li>推薦 12 至 40 人開局，最低 8 人。</li>
+            <li>主持人按下開始後，系統會隨機指定 6 位帶原者。</li>
+            <li>每位玩家有 1 次對方試紙與無限次去醫院檢查機會。</li>
+            <li>焦慮過高時視線會模糊，資訊更難看清。</li>
+            <li>每局結束由主持人推進下一局。</li>
+          </ul>
+        </article>
+      </div>
+
+      <article class="panel inset-panel">
+        <div class="panel-head compact-head">
+          <div>
+            <p class="eyebrow">玩家名單</p>
+            <h3><span id="player-count-display">0</span> / 40</h3>
+          </div>
+        </div>
+        <div id="player-list" class="player-list"></div>
+      </article>
+    </section>
+
+    <section id="round-screen" class="panel screen hidden">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">進行中</p>
+          <h2 id="round-title">第 1 局 / 7</h2>
+        </div>
+        <div class="round-meta">
+          <span id="timer-pill" class="phase-pill warm">等待主持人</span>
+          <span id="self-role-pill" class="phase-pill subtle">身份未揭曉</span>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <article class="stat-card">
+          <span>衝動值</span>
+          <strong id="desire-value">50%</strong>
+          <div class="meter"><div id="desire-bar" class="meter-fill desire-fill"></div></div>
+        </article>
+        <article class="stat-card">
+          <span>焦慮值</span>
+          <strong id="anxiety-value">0%</strong>
+          <div class="meter"><div id="anxiety-bar" class="meter-fill anxiety-fill"></div></div>
+        </article>
+        <article class="stat-card mini">
+          <span>親密次數</span>
+          <strong id="intimacy-value">0</strong>
+        </article>
+        <article class="stat-card mini">
+          <span>對方試紙</span>
+          <strong id="testkit-value">1</strong>
+        </article>
+      </div>
+
+      <div id="panic-warning" class="panic-warning hidden">焦慮過高，部分線索會變得模糊。</div>
+
+      <div class="battle-grid">
+        <article class="partner-card">
+          <div class="partner-top">
+            <div class="partner-avatar-wrap">
+              <div id="partner-avatar" class="partner-avatar">🌚</div>
+            </div>
+            <div>
+              <p class="eyebrow">當前對象</p>
+              <h3 id="partner-name">等待配對中</h3>
+              <p id="partner-flirt" class="partner-flirt">「主持人尚未開始這一局。」</p>
+            </div>
+          </div>
+          <div id="partner-tags" class="tag-cloud"></div>
+          <div class="partner-tools">
+            <button id="chat-btn" class="secondary-btn slim-btn">💬 試探 / 聊天</button>
+            <button id="test-btn" class="secondary-btn slim-btn">🧪 檢測對方</button>
+            <button id="hospital-btn" class="ghost-btn slim-btn">🏥 去醫院檢查</button>
+          </div>
+        </article>
+
+        <article class="action-card">
+          <div class="panel-head compact-head">
+            <div>
+              <p class="eyebrow">本局選擇</p>
+              <h3>你想怎麼做？</h3>
+            </div>
+          </div>
+          <div id="action-buttons" class="action-buttons"></div>
+          <div class="locked-card">
+            <span>已提交選擇</span>
+            <strong id="submitted-action-label">尚未提交</strong>
+            <p id="submission-hint">若時間結束仍未選擇，系統會自動判定為「換一個」。</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="summary-screen" class="panel screen hidden">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">本局結算</p>
+          <h2 id="summary-title">第 1 局已結束</h2>
+        </div>
+        <span id="summary-phase-pill" class="phase-pill">Summary</span>
+      </div>
+      <div class="summary-grid">
+        <article class="notice-card">
+          <h3>你的回合結果</h3>
+          <p id="summary-body">等待主持人結算。</p>
+          <div id="summary-extra" class="summary-extra"></div>
+        </article>
+        <article class="notice-card">
+          <h3>目前戰況</h3>
+          <div id="scoreboard" class="scoreboard"></div>
+        </article>
+      </div>
+      <div class="actions-row">
+        <button id="host-next-round-btn" class="primary-btn hidden">主持人推進下一局</button>
+      </div>
+    </section>
+
+    <section id="awards-screen" class="panel screen hidden">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">終局舞台</p>
+          <h2 id="awards-title">派對頒獎典禮</h2>
+        </div>
+      </div>
+      <article class="notice-card finale-banner">
+        <h3 id="finale-heading">全場揭曉</h3>
+        <p id="finale-body">主持人已完成最終結算。</p>
+      </article>
+      <div id="podium-stage" class="podium-stage"></div>
+      <article class="panel inset-panel">
+        <div class="panel-head compact-head">
+          <div>
+            <p class="eyebrow">完整名單</p>
+            <h3>終局結果</h3>
+          </div>
+        </div>
+        <div id="awards-list" class="awards-list"></div>
+      </article>
+      <div class="actions-row">
+        <button id="restart-btn" class="secondary-btn">回到首頁</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
