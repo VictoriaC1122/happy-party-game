@@ -310,9 +310,12 @@ input:focus {
 
 .text-btn {
   color: var(--muted);
-  background: transparent;
-  padding: 0;
-  min-height: auto;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 0 16px;
+  min-height: 44px;
+  border-radius: 999px;
+  align-self: flex-start;
 }
 
 .mode-grid,
@@ -655,7 +658,7 @@ input:focus {
 }
 
 .slim-btn {
-  min-height: 42px;
+  min-height: 48px;
 }
 
 .action-buttons {
