@@ -12,6 +12,7 @@ const GAME_CONFIG = {
   refuseDesireCost: 8,
   failedAttemptDesireCost: 6,
   failedAttemptAnxietyGain: 4,
+  oralCondomLockChance: 0.4,
   panicThreshold: 80,
   actionOrder: [
     "oral_condom",

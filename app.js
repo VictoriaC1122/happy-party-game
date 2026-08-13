@@ -27,6 +27,24 @@ const APP = {
   }
 };
 
+const ROUND_EVENT_DECK = [
+  {
+    blockedActions: ["oral_condom"],
+    badge: "現場缺貨",
+    detail: "這一局現場沒有可用的口交保護用品，無法選擇「戴套口交」。"
+  },
+  {
+    blockedActions: ["oral_condom"],
+    badge: "對方臨時改口",
+    detail: "這一局對方臨時不接受這種保護方式，無法選擇「戴套口交」。"
+  },
+  {
+    blockedActions: ["oral_condom"],
+    badge: "節奏太亂",
+    detail: "這一局現場節奏太混亂，無法安排到「戴套口交」這條路線。"
+  }
+];
+
 document.addEventListener("DOMContentLoaded", initApp);
 
 function initApp() {
@@ -751,6 +769,7 @@ function buildPartnerView(playerId, partnerId) {
     avatar: partner.avatar,
     flirt: partner.persona.flirt,
     testedResult: privateState.testedResult,
+    roundNotice: privateState.roundNotice,
     constraints: partner.persona.constraints,
     tags
   };
@@ -908,6 +927,13 @@ function renderPartnerTags(partner, anxiety) {
     testBadge.innerHTML = `<span class="icon">${partner.testedResult.infected ? "🧪" : "🛡️"}</span><span>${partner.testedResult.infected ? "試紙結果：陽性" : "試紙結果：陰性"}</span>`;
     APP.dom.partnerTags.appendChild(testBadge);
   }
+
+  if (partner.roundNotice) {
+    const eventBadge = document.createElement("div");
+    eventBadge.className = "tag tag-risk-soft";
+    eventBadge.innerHTML = `<span class="icon">🎲</span><span>${escapeHtml(partner.roundNotice.badge)}</span>`;
+    APP.dom.partnerTags.appendChild(eventBadge);
+  }
 }
 
 function tagClassName(color) {
@@ -957,7 +983,7 @@ function updateSubmissionCard(submission, partner, pendingUtility, noPartner) {
   }
   APP.dom.submittedActionLabel.textContent = "尚未提交";
   APP.dom.submissionHint.textContent = partner
-    ? "若倒數結束仍未提交，系統會自動判定為「換一個」。"
+    ? `${partner.roundNotice ? `${partner.roundNotice.detail} ` : ""}若倒數結束仍未提交，系統會自動判定為「換一個」。`
     : "輪空局無需提交，等待其他玩家完成。";
 }
 
@@ -1156,9 +1182,10 @@ function startHostRound() {
     pairMap[right] = left;
   });
 
+  const roundRestrictions = createRoundRestrictions(activeIds, pairs);
   const privateMap = {};
   activeIds.forEach((playerId) => {
-    privateMap[playerId] = createPrivateRoundState(playerId, pairMap[playerId]);
+    privateMap[playerId] = createPrivateRoundState(playerId, pairMap[playerId], roundRestrictions[playerId]);
   });
 
   room.round = {
@@ -1181,12 +1208,14 @@ function startHostRound() {
   hostSyncAll({ immediate: true });
 }
 
-function createPrivateRoundState(playerId, partnerId) {
+function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null }) {
   if (!partnerId) {
     return {
       hiddenIndices: [],
       revealedIndices: [],
-      testedResult: null
+      testedResult: null,
+      blockedActions: restriction.blockedActions.slice(),
+      roundNotice: restriction.roundNotice
     };
   }
 
@@ -1205,7 +1234,48 @@ function createPrivateRoundState(playerId, partnerId) {
   return {
     hiddenIndices,
     revealedIndices: [],
-    testedResult: null
+    testedResult: null,
+    blockedActions: restriction.blockedActions.slice(),
+    roundNotice: restriction.roundNotice
+  };
+}
+
+function createRoundRestrictions(activeIds, pairs) {
+  const restrictions = Object.fromEntries(activeIds.map((playerId) => [playerId, {
+    blockedActions: [],
+    roundNotice: null
+  }]));
+
+  pairs.forEach(([leftId, rightId]) => {
+    const event = createPairRoundEvent();
+    restrictions[leftId] = {
+      blockedActions: event.blockedActions.slice(),
+      roundNotice: event.roundNotice
+    };
+    restrictions[rightId] = {
+      blockedActions: event.blockedActions.slice(),
+      roundNotice: event.roundNotice
+    };
+  });
+
+  return restrictions;
+}
+
+function createPairRoundEvent() {
+  if (Math.random() >= GAME_CONFIG.oralCondomLockChance) {
+    return {
+      blockedActions: [],
+      roundNotice: null
+    };
+  }
+
+  const picked = randomFrom(ROUND_EVENT_DECK);
+  return {
+    blockedActions: picked?.blockedActions || [],
+    roundNotice: picked ? {
+      badge: picked.badge,
+      detail: picked.detail
+    } : null
   };
 }
 
@@ -1220,6 +1290,7 @@ function getAllowedActionsForPlayer(playerId) {
   }
 
   const constraints = room.players[partnerId].persona.constraints;
+  const privateState = room.round.private[playerId];
   const blocked = new Set();
   constraints.forEach((constraint) => {
     if (constraint === "no_condom") {
@@ -1235,6 +1306,10 @@ function getAllowedActionsForPlayer(playerId) {
       blocked.add("sex_condom");
       blocked.add("sex_raw");
     }
+  });
+
+  (privateState?.blockedActions || []).forEach((actionKey) => {
+    blocked.add(actionKey);
   });
 
   return GAME_CONFIG.actionOrder.filter((actionKey) => !blocked.has(actionKey));
