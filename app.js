@@ -87,6 +87,43 @@ const ROUND_EVENT_DECK = [
     blockedActions: ["oral_condom"],
     badge: "命運骰子惡作劇",
     detail: "命運骰子今天特別愛鬧，安全保底路線被它先丟出去了，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🕯️",
+    badge: "突然停電",
+    detail: "包廂突然停電，只剩忽明忽暗的緊急燈，這局所有實際發生的互動感染風險 x1.6。",
+    riskMultiplier: 1.6
+  },
+  {
+    icon: "💦",
+    badge: "香檳灑滿沙發",
+    detail: "香檳和冰塊灑得到處都是，大家手忙腳亂，這局所有實際發生的互動感染風險 +15%。",
+    riskBonus: 0.15
+  },
+  {
+    icon: "🌫️",
+    badge: "乾冰噴過頭",
+    detail: "乾冰機開太大，現場像迷霧副本，這局所有實際發生的互動感染風險 x1.8。",
+    riskMultiplier: 1.8
+  },
+  {
+    icon: "🚨",
+    badge: "火警誤鳴",
+    detail: "警報亂叫，大家全都慌了手腳，這局所有實際發生的互動感染風險 +20%。",
+    riskBonus: 0.2
+  },
+  {
+    icon: "🎉",
+    badge: "彩炮失控",
+    detail: "彩炮亂射、碎紙滿天飛，這局所有實際發生的互動感染風險 x1.5。",
+    riskMultiplier: 1.5
+  },
+  {
+    icon: "🛼",
+    blockedActions: ["oral_condom"],
+    badge: "地板太滑",
+    detail: "地板滑到像溜冰場，連站穩都很難，這局不能選「戴套口交」，而且所有實際發生的互動感染風險 +10%。",
+    riskBonus: 0.1
   }
 ];
 
@@ -1253,14 +1290,16 @@ function startHostRound() {
   hostSyncAll({ immediate: true });
 }
 
-function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null }) {
+function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0 }) {
   if (!partnerId) {
     return {
       hiddenIndices: [],
       revealedIndices: [],
       testedResult: null,
       blockedActions: restriction.blockedActions.slice(),
-      roundNotice: restriction.roundNotice
+      roundNotice: restriction.roundNotice,
+      riskMultiplier: restriction.riskMultiplier,
+      riskBonus: restriction.riskBonus
     };
   }
 
@@ -1281,25 +1320,33 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     revealedIndices: [],
     testedResult: null,
     blockedActions: restriction.blockedActions.slice(),
-    roundNotice: restriction.roundNotice
+    roundNotice: restriction.roundNotice,
+    riskMultiplier: restriction.riskMultiplier,
+    riskBonus: restriction.riskBonus
   };
 }
 
 function createRoundRestrictions(activeIds, pairs) {
   const restrictions = Object.fromEntries(activeIds.map((playerId) => [playerId, {
     blockedActions: [],
-    roundNotice: null
+    roundNotice: null,
+    riskMultiplier: 1,
+    riskBonus: 0
   }]));
 
   pairs.forEach(([leftId, rightId]) => {
     const event = createPairRoundEvent();
     restrictions[leftId] = {
       blockedActions: event.blockedActions.slice(),
-      roundNotice: event.roundNotice
+      roundNotice: event.roundNotice,
+      riskMultiplier: event.riskMultiplier,
+      riskBonus: event.riskBonus
     };
     restrictions[rightId] = {
       blockedActions: event.blockedActions.slice(),
-      roundNotice: event.roundNotice
+      roundNotice: event.roundNotice,
+      riskMultiplier: event.riskMultiplier,
+      riskBonus: event.riskBonus
     };
   });
 
@@ -1307,16 +1354,20 @@ function createRoundRestrictions(activeIds, pairs) {
 }
 
 function createPairRoundEvent() {
-  if (Math.random() >= GAME_CONFIG.oralCondomLockChance) {
+  if (Math.random() >= GAME_CONFIG.forceMajeureChance) {
     return {
       blockedActions: [],
-      roundNotice: null
+      roundNotice: null,
+      riskMultiplier: 1,
+      riskBonus: 0
     };
   }
 
   const picked = randomFrom(ROUND_EVENT_DECK);
   return {
     blockedActions: picked?.blockedActions || [],
+    riskMultiplier: picked?.riskMultiplier || 1,
+    riskBonus: picked?.riskBonus || 0,
     roundNotice: picked ? {
       icon: picked.icon,
       badge: picked.badge,
@@ -1506,6 +1557,7 @@ function resolveHostedRound() {
     intimateEvents: 0,
     riskyEvents: 0,
     hospitalVisits: 0,
+    forceMajeureSurges: 0,
     noExperiencePlayers: 0
   };
 
@@ -1553,6 +1605,7 @@ function resolveHostedRound() {
     publicCounter.intimateEvents += result.public.intimateEvents;
     publicCounter.riskyEvents += result.public.riskyEvents;
     publicCounter.hospitalVisits += result.public.hospitalVisits;
+    publicCounter.forceMajeureSurges += result.public.forceMajeureSurges;
   });
 
   Object.values(room.players).forEach((player) => {
@@ -1567,6 +1620,7 @@ function resolveHostedRound() {
       { label: "本局發生的親密互動", value: `${publicCounter.intimateEvents} 次` },
       { label: "高風險無套互動", value: `${publicCounter.riskyEvents} 次` },
       { label: "醫院檢查次數", value: `${publicCounter.hospitalVisits} 次` },
+      { label: "不可抗力增風險互動", value: `${publicCounter.forceMajeureSurges} 次` },
       { label: "尚未有親密經驗的人數", value: `${publicCounter.noExperiencePlayers} 人` }
     ]
   };
@@ -1583,7 +1637,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
   const publicStats = {
     intimateEvents: 0,
     riskyEvents: 0,
-    hospitalVisits: 0
+    hospitalVisits: 0,
+    forceMajeureSurges: 0
   };
 
   if (leftActionKey === "hospital") {
@@ -1643,11 +1698,21 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
   }
 
   if (leftIntimacy && rightIntimacy) {
+    const pairEffect = room.round.private[leftId] || room.round.private[rightId] || {};
+    const riskContext = {
+      riskMultiplier: pairEffect.riskMultiplier || 1,
+      riskBonus: pairEffect.riskBonus || 0,
+      roundNotice: pairEffect.roundNotice || null
+    };
+    const forceMajeureRisk = riskContext.riskMultiplier > 1 || riskContext.riskBonus > 0;
     const resolvedActionKey = resolveSharedAction(leftActionKey, rightActionKey);
     const resolvedAction = ACTIONS[resolvedActionKey];
     publicStats.intimateEvents += 1;
     if (!resolvedAction.condom) {
       publicStats.riskyEvents += 1;
+    }
+    if (forceMajeureRisk) {
+      publicStats.forceMajeureSurges += 1;
     }
 
     const leftPartnerWasInfected = right.isInfected;
@@ -1655,8 +1720,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     const leftInfectedBefore = left.isInfected;
     const rightInfectedBefore = right.isInfected;
 
-    maybeTransmit(right, left, resolvedActionKey, roundIndex);
-    maybeTransmit(left, right, resolvedActionKey, roundIndex);
+    maybeTransmit(right, left, resolvedActionKey, roundIndex, riskContext);
+    maybeTransmit(left, right, resolvedActionKey, roundIndex, riskContext);
 
     applyIntimacy(left, resolvedActionKey, leftPartnerWasInfected);
     applyIntimacy(right, resolvedActionKey, rightPartnerWasInfected);
@@ -1665,6 +1730,13 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     rightSummary.body = `你和 ${left.name} 的互動最後落在「${resolvedAction.shortLabel}」。衝動值下降，但焦慮值同步上升。`;
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
+
+    if (forceMajeureRisk && riskContext.roundNotice) {
+      leftSummary.chips.push({ label: "不可抗力增風險", kind: "warn" });
+      rightSummary.chips.push({ label: "不可抗力增風險", kind: "warn" });
+      leftSummary.notes.push(`本局鬧場事件「${riskContext.roundNotice.badge}」讓實際互動的感染風險比平常更高。`);
+      rightSummary.notes.push(`本局鬧場事件「${riskContext.roundNotice.badge}」讓實際互動的感染風險比平常更高。`);
+    }
 
     if (!leftInfectedBefore && left.isInfected && !left.detectedSelf) {
       leftSummary.notes.push("你沒有立刻察覺任何結果。若想確認自己是否安全，醫院才是唯一準確答案。");
@@ -1737,11 +1809,14 @@ function finalizeAnxiety(value) {
   return clamp(value + extra, 0, 100);
 }
 
-function maybeTransmit(sourcePlayer, targetPlayer, actionKey, roundIndex) {
+function maybeTransmit(sourcePlayer, targetPlayer, actionKey, roundIndex, riskContext = null) {
   if (!sourcePlayer.isInfected || targetPlayer.isInfected) {
     return;
   }
-  const risk = ACTIONS[actionKey].transmissionRisk;
+  const baseRisk = ACTIONS[actionKey].transmissionRisk;
+  const riskMultiplier = riskContext?.riskMultiplier || 1;
+  const riskBonus = riskContext?.riskBonus || 0;
+  const risk = clamp(baseRisk * riskMultiplier + riskBonus, 0, 0.98);
   if (Math.random() < risk) {
     targetPlayer.isInfected = true;
     targetPlayer.infectionSourceId = sourcePlayer.id;
