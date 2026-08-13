@@ -17,7 +17,14 @@ const APP = {
   pendingRoomCode: "",
   countdownTimer: null,
   hostDeadlineTimer: null,
-  hostIntervalTimer: null
+  hostIntervalTimer: null,
+  hostSyncTimer: null,
+  joinAttemptTimer: null,
+  localPending: {
+    submission: null,
+    utility: null,
+    roundStartedAt: null
+  }
 };
 
 document.addEventListener("DOMContentLoaded", initApp);
@@ -42,8 +49,10 @@ function cacheDom() {
     gotoJoinBtn: document.getElementById("goto-join-btn"),
     joinBackBtn: document.getElementById("join-back-btn"),
     joinForm: document.getElementById("join-form"),
+    joinSubmitBtn: document.querySelector("#join-form button[type='submit']"),
     roomCodeInput: document.getElementById("room-code-input"),
     playerNameInput: document.getElementById("player-name-input"),
+    hostNameInput: document.getElementById("host-name-input"),
     avatarPicker: document.getElementById("avatar-picker"),
     lobbyTitle: document.getElementById("lobby-title"),
     phasePill: document.getElementById("phase-pill"),
@@ -148,6 +157,7 @@ function hydrateStoredProfile() {
   const profile = loadStoredProfile();
   APP.selectedAvatar = sanitizeAvatar(profile.avatar);
   APP.dom.playerNameInput.value = profile.name || "";
+  APP.dom.hostNameInput.value = profile.name || "";
   highlightAvatarChip(APP.selectedAvatar);
 }
 
@@ -276,12 +286,8 @@ function clamp(value, min, max) {
 
 function handleCreateRoom() {
   const existing = currentProfile();
-  const defaultName = existing.name || "主持人";
-  const name = sanitizeName(window.prompt("請輸入主持人暱稱", defaultName) || defaultName);
-  if (!name) {
-    showToast("需要先設定主持人暱稱。");
-    return;
-  }
+  const typedName = sanitizeName(APP.dom.hostNameInput.value);
+  const name = typedName || existing.name || "主持人";
 
   const profile = {
     name,
@@ -289,6 +295,13 @@ function handleCreateRoom() {
   };
   saveStoredProfile(profile);
   APP.selectedAvatar = profile.avatar;
+  APP.dom.playerNameInput.value = profile.name;
+  APP.dom.hostNameInput.value = profile.name;
+  highlightAvatarChip(profile.avatar);
+
+  if (!typedName && !existing.name) {
+    showToast("未填主持暱稱，已套用預設「主持人」。");
+  }
 
   destroyPeerState();
   attemptCreateHostPeer(profile, 0);
@@ -402,6 +415,8 @@ function handleJoinSubmit(event) {
 
   saveStoredProfile({ name, avatar });
   destroyPeerState();
+  setJoinFormBusy(true, "正在連線…");
+  showToast("正在連線房間，請稍候。");
   createPlayerPeer(roomCode, { name, avatar });
 }
 
@@ -416,10 +431,16 @@ function createPlayerPeer(roomCode, profile) {
     APP.roomCode = roomCode;
     APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
     APP.playerSnapshot = null;
+    renderJoiningLobby(profile, roomCode, "正在連線");
+    startJoinAttemptTimeout();
     wirePlayerPeer(profile);
   });
 
   peer.on("error", (error) => {
+    clearJoinAttemptState();
+    if (!APP.playerSnapshot) {
+      switchScreen("join-screen");
+    }
     showToast(`加入房間失敗：${error.type || error.message}`);
   });
 }
@@ -429,6 +450,8 @@ function wirePlayerPeer(profile) {
   APP.hostConn = conn;
 
   conn.on("open", () => {
+    renderJoiningLobby(profile, APP.roomCode, "等待主持人回應");
+    startJoinAttemptTimeout();
     conn.send({
       type: "join-request",
       payload: {
@@ -440,9 +463,19 @@ function wirePlayerPeer(profile) {
 
   conn.on("data", handlePlayerMessage);
   conn.on("close", () => {
+    clearLocalPendingState();
+    clearJoinAttemptState();
+    if (!APP.playerSnapshot) {
+      switchScreen("join-screen");
+    }
     showToast("與主持人斷線，請重新加入房間。");
   });
   conn.on("error", () => {
+    clearLocalPendingState();
+    clearJoinAttemptState();
+    if (!APP.playerSnapshot) {
+      switchScreen("join-screen");
+    }
     showToast("連線中斷，請重新整理後再加入。");
   });
 }
@@ -506,7 +539,7 @@ function handleHostDisconnect(playerId) {
   } else {
     room.players[playerId].online = false;
   }
-  hostSyncAll();
+  hostSyncAll({ immediate: true });
 }
 
 function handlePlayerMessage(packet) {
@@ -515,6 +548,8 @@ function handlePlayerMessage(packet) {
   }
 
   if (packet.type === "join-rejected") {
+    clearLocalPendingState();
+    clearJoinAttemptState();
     showToast(packet.reason || "主持人拒絕加入。");
     switchScreen("join-screen");
     return;
@@ -526,7 +561,9 @@ function handlePlayerMessage(packet) {
   }
 
   if (packet.type === "snapshot") {
+    clearJoinAttemptState();
     APP.playerSnapshot = packet.snapshot;
+    reconcileLocalPendingState(packet.snapshot);
     renderPlayerSnapshot();
   }
 }
@@ -539,7 +576,25 @@ function getGamePlayerIds(room) {
   return Object.keys(room.players);
 }
 
-function hostSyncAll() {
+function hostSyncAll(options = {}) {
+  if (options.immediate) {
+    flushHostSync();
+    return;
+  }
+  if (APP.hostSyncTimer) {
+    return;
+  }
+  APP.hostSyncTimer = setTimeout(() => {
+    flushHostSync();
+  }, 40);
+}
+
+function flushHostSync() {
+  clearTimeout(APP.hostSyncTimer);
+  APP.hostSyncTimer = null;
+  if (!APP.hostRoom) {
+    return;
+  }
   renderHostSnapshot();
   APP.hostConnections.forEach((conn, playerId) => {
     if (conn.open && APP.hostRoom.players[playerId]) {
@@ -563,6 +618,28 @@ function renderPlayerSnapshot() {
     return;
   }
   renderSnapshot(APP.playerSnapshot);
+}
+
+function renderJoiningLobby(profile, roomCode, phaseLabel) {
+  APP.dom.lobbyTitle.textContent = "正在加入房間…";
+  APP.dom.phasePill.textContent = phaseLabel;
+  APP.dom.roomCodeDisplay.textContent = roomCode;
+  APP.dom.joinLinkDisplay.textContent = "等待主持人確認後顯示";
+  APP.dom.playerCountDisplay.textContent = "…";
+  APP.dom.startGameBtn.disabled = true;
+  APP.dom.hostControls.classList.add("hidden");
+  APP.dom.qrWrap.classList.add("hidden");
+  APP.dom.playerList.innerHTML = `
+    <article class="player-row">
+      <div class="player-avatar">${escapeHtml(profile.avatar)}</div>
+      <div class="player-meta">
+        <strong>${escapeHtml(profile.name)}</strong>
+        <span>正在與主持人同步入場資料</span>
+      </div>
+      <span class="phase-pill subtle">連線中</span>
+    </article>
+  `;
+  switchScreen("lobby-screen");
 }
 
 function buildSnapshotForPlayer(playerId) {
@@ -608,13 +685,18 @@ function buildSnapshotForPlayer(playerId) {
 
   if (room.phase === "round" && room.round) {
     const partnerId = room.round.pairMap[playerId] || null;
+    const pairedPlayerIds = Object.keys(room.round.pairMap).filter((id) => room.round.pairMap[id]);
     snapshot.round = {
       startedAt: room.round.startedAt,
       deadlineAt: room.round.deadlineAt,
       partnerId,
       partner: partnerId ? buildPartnerView(playerId, partnerId) : null,
       submission: room.round.submissions[playerId] || null,
-      availableActions: getAllowedActionsForPlayer(playerId)
+      availableActions: getAllowedActionsForPlayer(playerId),
+      submissionProgress: {
+        submittedCount: pairedPlayerIds.filter((id) => Boolean(room.round.submissions[id])).length,
+        totalCount: pairedPlayerIds.length
+      }
     };
   }
 
@@ -763,6 +845,10 @@ function renderQrCode(link) {
 function renderRound(snapshot) {
   const self = snapshot.self;
   const round = snapshot.round;
+  const pendingSubmission = snapshot.role === "player" ? APP.localPending.submission : null;
+  const pendingUtility = snapshot.role === "player" ? APP.localPending.utility : null;
+  const effectiveSubmission = round.submission || pendingSubmission;
+  const isLocked = Boolean(effectiveSubmission || pendingUtility);
   APP.dom.roundTitle.textContent = `第 ${snapshot.roundIndex} 局 / ${snapshot.roundCount}`;
   APP.dom.selfRolePill.textContent = describeRolePill(self);
   APP.dom.desireValue.textContent = `${self.desire}%`;
@@ -778,20 +864,19 @@ function renderRound(snapshot) {
     APP.dom.partnerName.textContent = "本局輪空";
     APP.dom.partnerFlirt.textContent = "「這一局你暫時沒有配對對象。」";
     APP.dom.partnerTags.innerHTML = "";
-    setPartnerToolState(false, true);
-    renderActionButtonStates([], round.submission, true);
+    setPartnerToolState(false, isLocked);
+    renderActionButtonStates([], effectiveSubmission, true, Boolean(pendingUtility));
   } else {
     APP.dom.partnerAvatar.textContent = round.partner.avatar;
     APP.dom.partnerName.textContent = round.partner.name;
     APP.dom.partnerFlirt.textContent = `「${round.partner.flirt}」`;
     renderPartnerTags(round.partner, self.anxiety);
-    const locked = Boolean(round.submission);
-    setPartnerToolState(true, locked);
-    renderActionButtonStates(round.availableActions, round.submission, false);
+    setPartnerToolState(true, isLocked);
+    renderActionButtonStates(round.availableActions, effectiveSubmission, false, Boolean(pendingUtility));
   }
 
-  updateSubmissionCard(round.submission, round.partner);
-  startCountdown(round.deadlineAt);
+  updateSubmissionCard(effectiveSubmission, round.partner, pendingUtility, !round.partner);
+  startCountdown(round.deadlineAt, round.submissionProgress, snapshot.role === "host");
 }
 
 function setPartnerToolState(hasPartner, locked) {
@@ -841,21 +926,33 @@ function tagIcon(color) {
   return "⏺";
 }
 
-function renderActionButtonStates(availableActions, submittedAction, noPartner) {
+function renderActionButtonStates(availableActions, submittedAction, noPartner, pendingUtility = false) {
   const buttons = Array.from(APP.dom.actionButtons.querySelectorAll(".action-option"));
   buttons.forEach((button) => {
     const actionKey = button.dataset.action;
-    const allowed = noPartner ? actionKey === "refuse" : availableActions.includes(actionKey);
-    button.disabled = Boolean(submittedAction) || !allowed;
+    const allowed = noPartner ? false : availableActions.includes(actionKey);
+    button.disabled = Boolean(submittedAction) || pendingUtility || !allowed;
     button.classList.toggle("selected", submittedAction === actionKey);
-    button.classList.toggle("locked", Boolean(submittedAction) || !allowed);
+    button.classList.toggle("locked", Boolean(submittedAction) || pendingUtility || !allowed);
   });
 }
 
-function updateSubmissionCard(submission, partner) {
+function updateSubmissionCard(submission, partner, pendingUtility, noPartner) {
   if (submission) {
     APP.dom.submittedActionLabel.textContent = ACTIONS[submission].shortLabel;
-    APP.dom.submissionHint.textContent = "本局已提交，請等待主持人結算。";
+    APP.dom.submissionHint.textContent = APP.localPending.submission && !APP.playerSnapshot?.round?.submission
+      ? "正在送出你的選擇…"
+      : "本局已提交，請等待主持人結算。";
+    return;
+  }
+  if (pendingUtility) {
+    APP.dom.submittedActionLabel.textContent = pendingUtility.label;
+    APP.dom.submissionHint.textContent = "正在同步你的操作，請稍候。";
+    return;
+  }
+  if (noPartner) {
+    APP.dom.submittedActionLabel.textContent = "本局可略過";
+    APP.dom.submissionHint.textContent = "輪空局不需提交互動選擇；若想確認自身狀態，仍可去醫院檢查。";
     return;
   }
   APP.dom.submittedActionLabel.textContent = "尚未提交";
@@ -864,11 +961,16 @@ function updateSubmissionCard(submission, partner) {
     : "輪空局無需提交，等待其他玩家完成。";
 }
 
-function startCountdown(deadlineAt) {
+function startCountdown(deadlineAt, progress, isHost) {
   clearInterval(APP.countdownTimer);
   const update = () => {
     const remaining = Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000));
-    APP.dom.timerPill.textContent = remaining > 0 ? `剩餘 ${remaining} 秒` : "主持人正在結算";
+    const timeLabel = remaining > 0 ? `剩餘 ${remaining} 秒` : "主持人正在結算";
+    if (isHost && progress?.totalCount) {
+      APP.dom.timerPill.textContent = `${timeLabel} · ${progress.submittedCount}/${progress.totalCount} 已交`;
+      return;
+    }
+    APP.dom.timerPill.textContent = timeLabel;
   };
   update();
   APP.countdownTimer = setInterval(update, 1000);
@@ -1076,7 +1178,7 @@ function startHostRound() {
     resolveHostedRound();
   }, GAME_CONFIG.roundDurationMs + 100);
 
-  hostSyncAll();
+  hostSyncAll({ immediate: true });
 }
 
 function createPrivateRoundState(playerId, partnerId) {
@@ -1143,7 +1245,11 @@ function handleChatReveal() {
     hostRevealTag(APP.selfId);
     return;
   }
+  if (APP.localPending.submission || APP.localPending.utility) {
+    return;
+  }
   if (APP.hostConn?.open) {
+    setLocalPendingUtility("chat", "正在試探…");
     APP.hostConn.send({ type: "chat-reveal" });
   }
 }
@@ -1176,7 +1282,11 @@ function handleUseTestkit() {
     hostUseTestkit(APP.selfId);
     return;
   }
+  if (APP.localPending.submission || APP.localPending.utility) {
+    return;
+  }
   if (APP.hostConn?.open) {
+    setLocalPendingUtility("testkit", "正在檢測…");
     APP.hostConn.send({ type: "use-testkit" });
   }
 }
@@ -1213,7 +1323,11 @@ function submitAction(actionKey) {
     hostReceiveAction(APP.selfId, actionKey);
     return;
   }
+  if (APP.localPending.submission || APP.localPending.utility) {
+    return;
+  }
   if (APP.hostConn?.open) {
+    setLocalPendingSubmission(actionKey);
     APP.hostConn.send({ type: "submit-action", action: actionKey });
   }
 }
@@ -1229,7 +1343,11 @@ function hostReceiveAction(playerId, actionKey) {
 
   const partnerId = room.round.pairMap[playerId];
   if (!partnerId) {
-    room.round.submissions[playerId] = "refuse";
+    if (actionKey !== "hospital") {
+      return;
+    }
+    room.round.submissions[playerId] = "hospital";
+    sendPrivateToast(playerId, `已提交：${ACTIONS.hospital.shortLabel}`);
     hostSyncAll();
     return;
   }
@@ -1267,17 +1385,31 @@ function resolveHostedRound() {
     intimateEvents: 0,
     riskyEvents: 0,
     hospitalVisits: 0,
-    noExperiencePlayers: 0,
-    testedThisRound: 0
+    noExperiencePlayers: 0
   };
 
   Object.keys(room.round.pairMap).forEach((playerId) => {
     if (!room.round.pairMap[playerId] && !privateSummaries[playerId]) {
+      const player = room.players[playerId];
+      const selfAction = room.round.submissions[playerId] || null;
+      if (selfAction === "hospital") {
+        applyHospital(player);
+        publicCounter.hospitalVisits += 1;
+        privateSummaries[playerId] = {
+          title: `第 ${room.roundIndex} 局結束`,
+          body: player.isInfected
+            ? "你在輪空局選擇去醫院檢查，檢驗結果確認你已經感染。"
+            : "你在輪空局選擇去醫院檢查，檢驗結果顯示你目前仍然健康。",
+          chips: [{ label: player.isInfected ? "確認感染" : "確認健康", kind: player.isInfected ? "bad" : "good" }],
+          notes: ["醫院會清空你的焦慮值，但衝動值會明顯上升。"]
+        };
+        return;
+      }
       privateSummaries[playerId] = {
         title: `第 ${room.roundIndex} 局結束`,
         body: "你本局輪空，沒有發生任何互動。",
         chips: [{ label: "輪空", kind: "warn" }],
-        notes: ["這一局不計入親密次數，也無法透過輪空達成通關條件。"]
+        notes: ["輪空局不會強迫你提交互動，也無法靠這一局累積親密次數。"]
       };
     }
   });
@@ -1303,9 +1435,6 @@ function resolveHostedRound() {
   });
 
   Object.values(room.players).forEach((player) => {
-    if (player.testkits < 1) {
-      publicCounter.testedThisRound += 0;
-    }
     if (player.intimacyCount === 0) {
       publicCounter.noExperiencePlayers += 1;
     }
@@ -1321,7 +1450,7 @@ function resolveHostedRound() {
     ]
   };
   room.phase = "summary";
-  hostSyncAll();
+  hostSyncAll({ immediate: true });
 }
 
 function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex) {
@@ -1557,7 +1686,7 @@ function finalizeHostedGame() {
   room.finalResults = finalResults;
   room.finale = buildFinale(players, healthyWinners, everyoneInfected, finalResults);
   room.phase = "awards";
-  hostSyncAll();
+  hostSyncAll({ immediate: true });
 }
 
 function buildFinale(players, healthyWinners, everyoneInfected, finalResults) {
@@ -1747,6 +1876,73 @@ function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function setJoinFormBusy(isBusy, label = "加入房間") {
+  APP.dom.joinSubmitBtn.disabled = isBusy;
+  APP.dom.joinSubmitBtn.textContent = label;
+  APP.dom.joinBackBtn.disabled = isBusy;
+  APP.dom.roomCodeInput.disabled = isBusy;
+  APP.dom.playerNameInput.disabled = isBusy;
+  Array.from(APP.dom.avatarPicker.querySelectorAll(".avatar-chip")).forEach((chip) => {
+    chip.disabled = isBusy;
+  });
+}
+
+function startJoinAttemptTimeout() {
+  clearTimeout(APP.joinAttemptTimer);
+  APP.joinAttemptTimer = setTimeout(() => {
+    if (APP.playerSnapshot || APP.role !== "player") {
+      return;
+    }
+    destroyPeerState();
+    switchScreen("join-screen");
+    showToast("加入房間逾時，請確認房號或稍後再試。");
+  }, 12000);
+}
+
+function clearJoinAttemptState() {
+  clearTimeout(APP.joinAttemptTimer);
+  APP.joinAttemptTimer = null;
+  setJoinFormBusy(false);
+}
+
+function setLocalPendingSubmission(actionKey) {
+  APP.localPending.submission = actionKey;
+  APP.localPending.utility = null;
+  if (APP.playerSnapshot) {
+    renderPlayerSnapshot();
+  }
+}
+
+function setLocalPendingUtility(kind, label) {
+  APP.localPending.utility = { kind, label };
+  if (APP.playerSnapshot) {
+    renderPlayerSnapshot();
+  }
+}
+
+function clearLocalPendingState() {
+  APP.localPending.submission = null;
+  APP.localPending.utility = null;
+  APP.localPending.roundStartedAt = null;
+}
+
+function reconcileLocalPendingState(snapshot) {
+  if (!snapshot || snapshot.phase !== "round" || !snapshot.round) {
+    clearLocalPendingState();
+    return;
+  }
+  if (APP.localPending.roundStartedAt !== snapshot.round.startedAt) {
+    clearLocalPendingState();
+    APP.localPending.roundStartedAt = snapshot.round.startedAt;
+    return;
+  }
+  APP.localPending.roundStartedAt = snapshot.round.startedAt;
+  if (snapshot.round.submission) {
+    APP.localPending.submission = null;
+  }
+  APP.localPending.utility = null;
+}
+
 function sendPrivateToast(playerId, message) {
   if (playerId === APP.selfId) {
     showToast(message);
@@ -1774,6 +1970,8 @@ function restartApp() {
 function destroyPeerState() {
   clearInterval(APP.countdownTimer);
   clearTimeout(APP.hostDeadlineTimer);
+  clearTimeout(APP.hostSyncTimer);
+  clearTimeout(APP.joinAttemptTimer);
   APP.hostConnections.forEach((conn) => {
     try {
       conn.close();
@@ -1804,4 +2002,8 @@ function destroyPeerState() {
   APP.selfId = "";
   APP.roomCode = "";
   APP.hostPeerId = "";
+  APP.hostSyncTimer = null;
+  APP.joinAttemptTimer = null;
+  clearJoinAttemptState();
+  clearLocalPendingState();
 }

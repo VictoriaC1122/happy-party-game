@@ -284,7 +284,8 @@ input:focus {
 
 .primary-btn:disabled,
 .secondary-btn:disabled,
-.ghost-btn:disabled {
+.ghost-btn:disabled,
+.text-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
@@ -376,6 +377,11 @@ input:focus {
   border-color: rgba(255, 196, 104, 0.48);
   background: rgba(255, 196, 104, 0.14);
   box-shadow: 0 0 0 4px rgba(255, 196, 104, 0.08);
+}
+
+.avatar-chip:disabled {
+  opacity: 0.4;
+  cursor: wait;
 }
 
 .lobby-grid {
