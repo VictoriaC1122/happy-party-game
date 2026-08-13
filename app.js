@@ -29,19 +29,64 @@ const APP = {
 
 const ROUND_EVENT_DECK = [
   {
+    icon: "🦜",
     blockedActions: ["oral_condom"],
-    badge: "現場缺貨",
-    detail: "這一局現場沒有可用的口交保護用品，無法選擇「戴套口交」。"
+    badge: "鸚鵡叼走補給箱",
+    detail: "不知道誰帶來的派對鸚鵡把整盒口交保護用品叼上吊燈了，這局不能選「戴套口交」。"
   },
   {
+    icon: "🎈",
     blockedActions: ["oral_condom"],
-    badge: "對方臨時改口",
-    detail: "這一局對方臨時不接受這種保護方式，無法選擇「戴套口交」。"
+    badge: "氣球藝術誤用",
+    detail: "有人把保護用品全吹成長條氣球做拱門，這局不能選「戴套口交」。"
   },
   {
+    icon: "🪩",
     blockedActions: ["oral_condom"],
-    badge: "節奏太亂",
-    detail: "這一局現場節奏太混亂，無法安排到「戴套口交」這條路線。"
+    badge: "迪斯可燈誤判",
+    detail: "舞池燈光亂閃到誰都看不清道具放哪，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🍸",
+    blockedActions: ["oral_condom"],
+    badge: "酒保拿去當杯套",
+    detail: "酒保把整包拿去套調酒杯口搞表演了，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🎤",
+    blockedActions: ["oral_condom"],
+    badge: "主持人口誤懲罰",
+    detail: "主持人剛剛亂喊口令，現場進入 60 秒荒謬模式，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🧽",
+    blockedActions: ["oral_condom"],
+    badge: "清潔阿姨大掃除",
+    detail: "清潔阿姨把桌面看起來太像垃圾的那盒順手收走了，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🐙",
+    blockedActions: ["oral_condom"],
+    badge: "觸手裝飾纏住抽屜",
+    detail: "派對觸手裝飾卡住抽屜，補給打不開，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "📦",
+    blockedActions: ["oral_condom"],
+    badge: "神祕補給投錯房",
+    detail: "系統把本局補給包送去隔壁包廂了，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🪄",
+    blockedActions: ["oral_condom"],
+    badge: "魔術師借道具未還",
+    detail: "暖場魔術師把那盒拿去變不見，然後真的沒還，這局不能選「戴套口交」。"
+  },
+  {
+    icon: "🎲",
+    blockedActions: ["oral_condom"],
+    badge: "命運骰子惡作劇",
+    detail: "命運骰子今天特別愛鬧，安全保底路線被它先丟出去了，這局不能選「戴套口交」。"
   }
 ];
 
@@ -931,7 +976,7 @@ function renderPartnerTags(partner, anxiety) {
   if (partner.roundNotice) {
     const eventBadge = document.createElement("div");
     eventBadge.className = "tag tag-risk-soft";
-    eventBadge.innerHTML = `<span class="icon">🎲</span><span>${escapeHtml(partner.roundNotice.badge)}</span>`;
+    eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.roundNotice.icon || "🎲")}</span><span>${escapeHtml(`本局鬧場：${partner.roundNotice.badge}`)}</span>`;
     APP.dom.partnerTags.appendChild(eventBadge);
   }
 }
@@ -983,7 +1028,7 @@ function updateSubmissionCard(submission, partner, pendingUtility, noPartner) {
   }
   APP.dom.submittedActionLabel.textContent = "尚未提交";
   APP.dom.submissionHint.textContent = partner
-    ? `${partner.roundNotice ? `${partner.roundNotice.detail} ` : ""}若倒數結束仍未提交，系統會自動判定為「換一個」。`
+    ? `${partner.roundNotice ? `鬧場事件：${partner.roundNotice.detail} ` : ""}若倒數結束仍未提交，系統會自動判定為「換一個」。`
     : "輪空局無需提交，等待其他玩家完成。";
 }
 
@@ -1273,6 +1318,7 @@ function createPairRoundEvent() {
   return {
     blockedActions: picked?.blockedActions || [],
     roundNotice: picked ? {
+      icon: picked.icon,
       badge: picked.badge,
       detail: picked.detail
     } : null
