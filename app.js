@@ -31,62 +31,62 @@ const ROUND_EVENT_DECK = [
   {
     icon: "🦜",
     blockedActions: ["oral_condom"],
-    badge: "鸚鵡叼走補給箱",
-    detail: "不知道誰帶來的派對鸚鵡把整盒口交保護用品叼上吊燈了，這局不能選「戴套口交」。"
+    badge: "我今天就是不想",
+    detail: "對方把頭一偏說：「我今天就是不想。」這局不能選「戴套口交」。"
   },
   {
     icon: "🎈",
     blockedActions: ["oral_condom"],
-    badge: "氣球藝術誤用",
-    detail: "有人把保護用品全吹成長條氣球做拱門，這局不能選「戴套口交」。"
+    badge: "嘴巴今天公休",
+    detail: "對方一本正經地宣布：「嘴巴今天公休，明天再來。」這局不能選「戴套口交」。"
   },
   {
     icon: "🪩",
     blockedActions: ["oral_condom"],
-    badge: "迪斯可燈誤判",
-    detail: "舞池燈光亂閃到誰都看不清道具放哪，這局不能選「戴套口交」。"
+    badge: "這個我先不要",
+    detail: "對方眨眨眼只回你一句：「這個我先不要。」這局不能選「戴套口交」。"
   },
   {
     icon: "🍸",
     blockedActions: ["oral_condom"],
-    badge: "酒保拿去當杯套",
-    detail: "酒保把整包拿去套調酒杯口搞表演了，這局不能選「戴套口交」。"
+    badge: "不要跟我談流程",
+    detail: "對方邊笑邊擺手：「不要跟我談流程，我今天走感覺派。」這局不能選「戴套口交」。"
   },
   {
     icon: "🎤",
     blockedActions: ["oral_condom"],
-    badge: "主持人口誤懲罰",
-    detail: "主持人剛剛亂喊口令，現場進入 60 秒荒謬模式，這局不能選「戴套口交」。"
+    badge: "今天走任性路線",
+    detail: "對方很有主見地說：「今天走任性路線，那個先不要。」這局不能選「戴套口交」。"
   },
   {
     icon: "🧽",
     blockedActions: ["oral_condom"],
-    badge: "清潔阿姨大掃除",
-    detail: "清潔阿姨把桌面看起來太像垃圾的那盒順手收走了，這局不能選「戴套口交」。"
+    badge: "先聊天，不要那個",
+    detail: "對方把距離拉近，小聲說：「先聊天，不要那個。」這局不能選「戴套口交」。"
   },
   {
     icon: "🐙",
     blockedActions: ["oral_condom"],
-    badge: "觸手裝飾纏住抽屜",
-    detail: "派對觸手裝飾卡住抽屜，補給打不開，這局不能選「戴套口交」。"
+    badge: "問就是不想",
+    detail: "你才剛開口，對方就秒回：「不要問，問就是不想。」這局不能選「戴套口交」。"
   },
   {
     icon: "📦",
     blockedActions: ["oral_condom"],
-    badge: "神祕補給投錯房",
-    detail: "系統把本局補給包送去隔壁包廂了，這局不能選「戴套口交」。"
+    badge: "我剛剛許願了，不行",
+    detail: "對方神神祕祕地說：「我剛剛有許願，今天不走這條線。」這局不能選「戴套口交」。"
   },
   {
     icon: "🪄",
     blockedActions: ["oral_condom"],
-    badge: "魔術師借道具未還",
-    detail: "暖場魔術師把那盒拿去變不見，然後真的沒還，這局不能選「戴套口交」。"
+    badge: "今天口交額度用完",
+    detail: "對方攤手聳肩：「今天口交額度用完，改天再說。」這局不能選「戴套口交」。"
   },
   {
     icon: "🎲",
     blockedActions: ["oral_condom"],
-    badge: "命運骰子惡作劇",
-    detail: "命運骰子今天特別愛鬧，安全保底路線被它先丟出去了，這局不能選「戴套口交」。"
+    badge: "規則是我剛剛現編的",
+    detail: "對方理直氣壯地下結論：「規則是我剛剛現編的，這個今天不玩。」這局不能選「戴套口交」。"
   },
   {
     icon: "🕯️",
