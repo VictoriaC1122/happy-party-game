@@ -50,6 +50,8 @@ input {
 button {
   border: 0;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 input {
@@ -172,6 +174,8 @@ input:focus {
 .screen {
   border-radius: var(--radius-xl);
   padding: 24px;
+  contain: layout paint;
+  will-change: transform, opacity;
 }
 
 .screen.hidden {
@@ -180,6 +184,19 @@ input:focus {
 
 .screen.active {
   display: block;
+  animation: screen-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .panel-head {
@@ -437,6 +454,7 @@ input:focus {
 .awards-list {
   display: grid;
   gap: 10px;
+  contain: layout paint;
 }
 
 .player-row,
@@ -585,6 +603,7 @@ input:focus {
   gap: 10px;
   margin-top: 18px;
   min-height: 104px;
+  contain: layout paint;
 }
 
 .tag {
@@ -725,6 +744,7 @@ input:focus {
   display: grid;
   gap: 10px;
   margin-top: 12px;
+  contain: layout paint;
 }
 
 .summary-chip,
@@ -763,6 +783,7 @@ input:focus {
 .scoreboard {
   display: grid;
   gap: 10px;
+  contain: layout paint;
 }
 
 .score-row {
@@ -792,6 +813,7 @@ input:focus {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
   gap: 14px;
+  contain: layout paint;
 }
 
 .podium-card {
@@ -839,7 +861,7 @@ input:focus {
   position: fixed;
   left: 50%;
   bottom: 24px;
-  transform: translateX(-50%);
+  transform: translate(-50%, 0) scale(1);
   max-width: min(560px, calc(100vw - 32px));
   padding: 14px 18px;
   border-radius: 16px;
@@ -848,10 +870,33 @@ input:focus {
   box-shadow: var(--shadow);
   color: var(--text);
   z-index: 50;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s linear;
+  will-change: transform, opacity;
 }
 
 .toast.hidden {
-  display: none;
+  display: block !important;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 14px) scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.active {
+    animation: none;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .ghost-btn,
+  .text-btn,
+  .toast,
+  .meter-fill {
+    transition: none;
+  }
 }
 
 .plain-list {

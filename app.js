@@ -5,16 +5,27 @@ const HOST_PEER_PREFIX = "happy-party-host-";
 const APP = {
   dom: {},
   role: null,
+  activeScreenId: null,
   peer: null,
   hostConn: null,
   hostConnections: new Map(),
   hostRoom: null,
   playerSnapshot: null,
+  queuedSnapshot: null,
+  actionButtonNodes: [],
+  countdownState: null,
+  lastSentSnapshotKeys: new Map(),
+  lastToast: {
+    message: "",
+    shownAt: 0
+  },
+  renderSignature: "",
   roomCode: "",
   hostPeerId: "",
   selfId: "",
   selectedAvatar: AVATARS[0],
   pendingRoomCode: "",
+  renderFrame: null,
   countdownTimer: null,
   hostDeadlineTimer: null,
   hostIntervalTimer: null,
@@ -286,6 +297,7 @@ function highlightAvatarChip(avatar) {
 
 function renderActionButtons() {
   APP.dom.actionButtons.innerHTML = "";
+  APP.actionButtonNodes = [];
   ["oral_condom", "sex_condom", "oral_raw", "sex_raw", "refuse"].forEach((actionKey) => {
     const action = ACTIONS[actionKey];
     const button = document.createElement("button");
@@ -295,10 +307,15 @@ function renderActionButtons() {
     button.innerHTML = `<strong>${action.label}</strong><span>${action.description}</span>`;
     button.addEventListener("click", () => submitAction(actionKey));
     APP.dom.actionButtons.appendChild(button);
+    APP.actionButtonNodes.push(button);
   });
 }
 
 function switchScreen(screenId) {
+  if (APP.activeScreenId === screenId) {
+    return;
+  }
+  APP.activeScreenId = screenId;
   APP.dom.screens.forEach((screen) => {
     const active = screen.id === screenId;
     screen.classList.toggle("hidden", !active);
@@ -307,12 +324,153 @@ function switchScreen(screenId) {
 }
 
 function showToast(message) {
-  APP.dom.toast.textContent = message;
+  const text = String(message || "").trim();
+  if (!text) {
+    return;
+  }
+  const now = Date.now();
+  if (APP.lastToast.message === text && now - APP.lastToast.shownAt < 900) {
+    return;
+  }
+  APP.lastToast.message = text;
+  APP.lastToast.shownAt = now;
+  APP.dom.toast.textContent = text;
   APP.dom.toast.classList.remove("hidden");
   clearTimeout(APP.dom.toast._timer);
-  APP.dom.toast._timer = setTimeout(() => {
-    APP.dom.toast.classList.add("hidden");
-  }, 2600);
+  APP.dom.toast._timer = setTimeout(hideToast, 2600);
+}
+
+function hideToast() {
+  if (!APP.dom.toast) {
+    return;
+  }
+  clearTimeout(APP.dom.toast._timer);
+  APP.dom.toast._timer = null;
+  APP.dom.toast.classList.add("hidden");
+}
+
+function createSnapshotSignature(snapshot) {
+  return JSON.stringify(snapshot);
+}
+
+function createRenderSignature(snapshot) {
+  const pendingState = snapshot.role === "player" && snapshot.phase === "round"
+    ? {
+        submission: APP.localPending.submission,
+        utility: APP.localPending.utility,
+        roundStartedAt: APP.localPending.roundStartedAt
+      }
+    : null;
+
+  return JSON.stringify({
+    snapshot,
+    pendingState
+  });
+}
+
+function buildPublicPlayerList(room) {
+  return Object.values(room.players)
+    .sort((left, right) => left.joinedAt - right.joinedAt)
+    .map((player) => {
+      const result = room.finalResults ? room.finalResults[player.id] : null;
+      return {
+        id: player.id,
+        name: player.name,
+        avatar: player.avatar,
+        isHost: player.isHost,
+        online: player.online !== false,
+        intimacyCount: player.intimacyCount,
+        result
+      };
+    });
+}
+
+function buildSnapshotSharedContext(room) {
+  const shared = {
+    joinLink: buildJoinLink(room.roomCode),
+    publicPlayers: buildPublicPlayerList(room)
+  };
+
+  if (room.phase === "round" && room.round) {
+    const pairedPlayerIds = Object.keys(room.round.pairMap).filter((id) => room.round.pairMap[id]);
+    shared.round = {
+      startedAt: room.round.startedAt,
+      deadlineAt: room.round.deadlineAt,
+      submissionProgress: {
+        submittedCount: pairedPlayerIds.filter((id) => Boolean(room.round.submissions[id])).length,
+        totalCount: pairedPlayerIds.length
+      }
+    };
+  }
+
+  return shared;
+}
+
+function stopCountdown() {
+  clearTimeout(APP.countdownTimer);
+  APP.countdownTimer = null;
+  APP.countdownState = null;
+}
+
+function updateCountdownText() {
+  if (!APP.countdownState) {
+    return;
+  }
+
+  const remaining = Math.max(0, Math.ceil((APP.countdownState.deadlineAt - Date.now()) / 1000));
+  const timeLabel = remaining > 0 ? `還有 ${remaining} 秒` : "主揪正在翻牌";
+  if (APP.countdownState.isHost && APP.countdownState.totalCount) {
+    APP.dom.timerPill.textContent = `${timeLabel} · ${APP.countdownState.submittedCount}/${APP.countdownState.totalCount} 已出牌`;
+    return;
+  }
+  APP.dom.timerPill.textContent = timeLabel;
+}
+
+function queueCountdownTick() {
+  clearTimeout(APP.countdownTimer);
+  if (!APP.countdownState) {
+    APP.countdownTimer = null;
+    return;
+  }
+
+  const remainingMs = APP.countdownState.deadlineAt - Date.now();
+  if (remainingMs <= 0) {
+    updateCountdownText();
+    APP.countdownTimer = null;
+    return;
+  }
+
+  const nextDelay = Math.max(120, Math.min(1000, (remainingMs % 1000) + 40));
+  APP.countdownTimer = setTimeout(() => {
+    updateCountdownText();
+    queueCountdownTick();
+  }, nextDelay);
+}
+
+function cancelQueuedRender() {
+  if (APP.renderFrame !== null) {
+    cancelAnimationFrame(APP.renderFrame);
+    APP.renderFrame = null;
+  }
+  APP.queuedSnapshot = null;
+}
+
+function queueSnapshotRender(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  APP.queuedSnapshot = snapshot;
+  if (APP.renderFrame !== null) {
+    return;
+  }
+  APP.renderFrame = requestAnimationFrame(() => {
+    const nextSnapshot = APP.queuedSnapshot;
+    APP.renderFrame = null;
+    APP.queuedSnapshot = null;
+    if (nextSnapshot) {
+      renderSnapshot(nextSnapshot);
+    }
+  });
 }
 
 function loadStoredProfile() {
@@ -630,6 +788,7 @@ function handleHostMessage(conn, packet) {
 function handleHostDisconnect(playerId) {
   const room = APP.hostRoom;
   APP.hostConnections.delete(playerId);
+  APP.lastSentSnapshotKeys.delete(playerId);
   if (!room || !room.players[playerId]) {
     return;
   }
@@ -695,29 +854,37 @@ function flushHostSync() {
   if (!APP.hostRoom) {
     return;
   }
-  renderHostSnapshot();
+  const sharedContext = buildSnapshotSharedContext(APP.hostRoom);
+  const hostSnapshot = buildSnapshotForPlayer(APP.selfId, sharedContext);
+  renderHostSnapshot(hostSnapshot);
   APP.hostConnections.forEach((conn, playerId) => {
     if (conn.open && APP.hostRoom.players[playerId]) {
+      const snapshot = buildSnapshotForPlayer(playerId, sharedContext);
+      const signature = createSnapshotSignature(snapshot);
+      if (APP.lastSentSnapshotKeys.get(playerId) === signature) {
+        return;
+      }
+      APP.lastSentSnapshotKeys.set(playerId, signature);
       conn.send({
         type: "snapshot",
-        snapshot: buildSnapshotForPlayer(playerId)
+        snapshot
       });
     }
   });
 }
 
-function renderHostSnapshot() {
-  if (!APP.hostRoom) {
+function renderHostSnapshot(snapshot = null) {
+  if (!APP.hostRoom && !snapshot) {
     return;
   }
-  renderSnapshot(buildSnapshotForPlayer(APP.selfId));
+  queueSnapshotRender(snapshot || buildSnapshotForPlayer(APP.selfId));
 }
 
-function renderPlayerSnapshot() {
-  if (!APP.playerSnapshot) {
+function renderPlayerSnapshot(snapshot = null) {
+  if (!APP.playerSnapshot && !snapshot) {
     return;
   }
-  renderSnapshot(APP.playerSnapshot);
+  queueSnapshotRender(snapshot || APP.playerSnapshot);
 }
 
 function renderJoiningLobby(profile, roomCode, phaseLabel) {
@@ -742,23 +909,10 @@ function renderJoiningLobby(profile, roomCode, phaseLabel) {
   switchScreen("lobby-screen");
 }
 
-function buildSnapshotForPlayer(playerId) {
+function buildSnapshotForPlayer(playerId, sharedContext = null) {
   const room = APP.hostRoom;
   const me = room.players[playerId];
-  const publicPlayers = Object.values(room.players)
-    .sort((left, right) => left.joinedAt - right.joinedAt)
-    .map((player) => {
-      const result = room.finalResults ? room.finalResults[player.id] : null;
-      return {
-        id: player.id,
-        name: player.name,
-        avatar: player.avatar,
-        isHost: player.isHost,
-        online: player.online !== false,
-        intimacyCount: player.intimacyCount,
-        result
-      };
-    });
+  const shared = sharedContext || buildSnapshotSharedContext(room);
 
   const snapshot = {
     role: playerId === room.hostId ? "host" : "player",
@@ -767,8 +921,8 @@ function buildSnapshotForPlayer(playerId) {
     roundIndex: room.roundIndex,
     roundCount: room.roundCount,
     canStart: room.phase === "lobby" && activeLobbyPlayers(room).length >= GAME_CONFIG.minPlayers,
-    joinLink: buildJoinLink(room.roomCode),
-    players: publicPlayers,
+    joinLink: shared.joinLink,
+    players: shared.publicPlayers,
     self: {
       id: me.id,
       name: me.name,
@@ -785,18 +939,14 @@ function buildSnapshotForPlayer(playerId) {
 
   if (room.phase === "round" && room.round) {
     const partnerId = room.round.pairMap[playerId] || null;
-    const pairedPlayerIds = Object.keys(room.round.pairMap).filter((id) => room.round.pairMap[id]);
     snapshot.round = {
-      startedAt: room.round.startedAt,
-      deadlineAt: room.round.deadlineAt,
+      startedAt: shared.round.startedAt,
+      deadlineAt: shared.round.deadlineAt,
       partnerId,
       partner: partnerId ? buildPartnerView(playerId, partnerId) : null,
       submission: room.round.submissions[playerId] || null,
       availableActions: getAllowedActionsForPlayer(playerId),
-      submissionProgress: {
-        submittedCount: pairedPlayerIds.filter((id) => Boolean(room.round.submissions[id])).length,
-        totalCount: pairedPlayerIds.length
-      }
+      submissionProgress: shared.round.submissionProgress
     };
   }
 
@@ -867,6 +1017,12 @@ function fallbackSummary() {
 }
 
 function renderSnapshot(snapshot) {
+  const renderSignature = createRenderSignature(snapshot);
+  if (APP.renderSignature === renderSignature) {
+    return;
+  }
+  APP.renderSignature = renderSignature;
+
   if (snapshot.phase === "lobby") {
     renderLobby(snapshot);
     switchScreen("lobby-screen");
@@ -904,7 +1060,7 @@ function renderLobby(snapshot) {
     APP.dom.qrWrap.classList.add("hidden");
   }
 
-  APP.dom.playerList.innerHTML = "";
+  const fragment = document.createDocumentFragment();
   snapshot.players.forEach((player) => {
     const row = document.createElement("article");
     row.className = `player-row${player.online ? "" : " offline"}`;
@@ -916,8 +1072,9 @@ function renderLobby(snapshot) {
       </div>
       <span class="phase-pill subtle">${player.online ? "已卡位" : "斷線中"}</span>
     `;
-    APP.dom.playerList.appendChild(row);
+    fragment.appendChild(row);
   });
+  APP.dom.playerList.replaceChildren(fragment);
 }
 
 function renderQrCode(link) {
@@ -927,7 +1084,7 @@ function renderQrCode(link) {
   if (APP.dom.qrCode.dataset.value === link) {
     return;
   }
-  APP.dom.qrCode.innerHTML = "";
+  APP.dom.qrCode.replaceChildren();
   APP.dom.qrCode.dataset.value = link;
   QRCode.toCanvas(link, {
     width: 180,
@@ -938,7 +1095,7 @@ function renderQrCode(link) {
     }
   }, (error, canvas) => {
     if (!error && canvas) {
-      APP.dom.qrCode.appendChild(canvas);
+      APP.dom.qrCode.replaceChildren(canvas);
     }
   });
 }
@@ -964,7 +1121,7 @@ function renderRound(snapshot) {
     APP.dom.partnerAvatar.textContent = "🪑";
     APP.dom.partnerName.textContent = "這局放空";
     APP.dom.partnerFlirt.textContent = "「這局先讓你喘口氣，暫時沒人跟你對到。」";
-    APP.dom.partnerTags.innerHTML = "";
+    APP.dom.partnerTags.replaceChildren();
     setPartnerToolState(false, isLocked);
     renderActionButtonStates([], effectiveSubmission, true, Boolean(pendingUtility));
   } else {
@@ -987,7 +1144,7 @@ function setPartnerToolState(hasPartner, locked) {
 }
 
 function renderPartnerTags(partner, anxiety) {
-  APP.dom.partnerTags.innerHTML = "";
+  const fragment = document.createDocumentFragment();
   const shouldBlur = anxiety >= GAME_CONFIG.panicThreshold;
 
   partner.tags.forEach((tag, index) => {
@@ -1000,22 +1157,23 @@ function renderPartnerTags(partner, anxiety) {
       badge.className = `tag ${tagClassName(tag.color)}`;
       badge.innerHTML = `<span class="icon">${tagIcon(tag.color)}</span><span>${escapeHtml(tag.text)}</span>`;
     }
-    APP.dom.partnerTags.appendChild(badge);
+    fragment.appendChild(badge);
   });
 
   if (partner.testedResult) {
     const testBadge = document.createElement("div");
     testBadge.className = `tag ${partner.testedResult.infected ? "tag-tested-positive" : "tag-tested-negative"}`;
     testBadge.innerHTML = `<span class="icon">${partner.testedResult.infected ? "🧪" : "🛡️"}</span><span>${partner.testedResult.infected ? "試紙爆燈：陽性" : "試紙很安靜：陰性"}</span>`;
-    APP.dom.partnerTags.appendChild(testBadge);
+    fragment.appendChild(testBadge);
   }
 
   if (partner.roundNotice) {
     const eventBadge = document.createElement("div");
     eventBadge.className = "tag tag-risk-soft";
     eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.roundNotice.icon || "🎲")}</span><span>${escapeHtml(`亂入事件：${partner.roundNotice.badge}`)}</span>`;
-    APP.dom.partnerTags.appendChild(eventBadge);
+    fragment.appendChild(eventBadge);
   }
+  APP.dom.partnerTags.replaceChildren(fragment);
 }
 
 function tagClassName(color) {
@@ -1035,8 +1193,7 @@ function tagIcon(color) {
 }
 
 function renderActionButtonStates(availableActions, submittedAction, noPartner, pendingUtility = false) {
-  const buttons = Array.from(APP.dom.actionButtons.querySelectorAll(".action-option"));
-  buttons.forEach((button) => {
+  APP.actionButtonNodes.forEach((button) => {
     const actionKey = button.dataset.action;
     const allowed = noPartner ? false : availableActions.includes(actionKey);
     button.disabled = Boolean(submittedAction) || pendingUtility || !allowed;
@@ -1070,18 +1227,19 @@ function updateSubmissionCard(submission, partner, pendingUtility, noPartner) {
 }
 
 function startCountdown(deadlineAt, progress, isHost) {
-  clearInterval(APP.countdownTimer);
-  const update = () => {
-    const remaining = Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000));
-    const timeLabel = remaining > 0 ? `還有 ${remaining} 秒` : "主揪正在翻牌";
-    if (isHost && progress?.totalCount) {
-      APP.dom.timerPill.textContent = `${timeLabel} · ${progress.submittedCount}/${progress.totalCount} 已出牌`;
-      return;
-    }
-    APP.dom.timerPill.textContent = timeLabel;
+  const nextState = {
+    deadlineAt,
+    isHost: Boolean(isHost),
+    submittedCount: progress?.submittedCount || 0,
+    totalCount: progress?.totalCount || 0
   };
-  update();
-  APP.countdownTimer = setInterval(update, 1000);
+  const shouldRestart = !APP.countdownTimer || APP.countdownState?.deadlineAt !== nextState.deadlineAt;
+  APP.countdownState = nextState;
+  updateCountdownText();
+  if (!shouldRestart) {
+    return;
+  }
+  queueCountdownTick();
 }
 
 function describeRolePill(self) {
@@ -1098,32 +1256,34 @@ function describeRolePill(self) {
 }
 
 function renderSummary(snapshot) {
-  clearInterval(APP.countdownTimer);
+  stopCountdown();
   APP.dom.summaryTitle.textContent = snapshot.summary.private.title;
   APP.dom.summaryBody.textContent = snapshot.summary.private.body;
-  APP.dom.summaryExtra.innerHTML = "";
+  const extraFragment = document.createDocumentFragment();
   APP.dom.summaryPhasePill.textContent = "這局翻牌";
 
   snapshot.summary.private.chips.forEach((chip) => {
     const badge = document.createElement("div");
     badge.className = `summary-chip ${chip.kind}`;
     badge.textContent = chip.label;
-    APP.dom.summaryExtra.appendChild(badge);
+    extraFragment.appendChild(badge);
   });
 
   snapshot.summary.private.notes.forEach((note) => {
     const text = document.createElement("p");
     text.textContent = note;
-    APP.dom.summaryExtra.appendChild(text);
+    extraFragment.appendChild(text);
   });
+  APP.dom.summaryExtra.replaceChildren(extraFragment);
 
-  APP.dom.scoreboard.innerHTML = "";
+  const scoreboardFragment = document.createDocumentFragment();
   snapshot.summary.publicStats.forEach((item) => {
     const row = document.createElement("div");
     row.className = "score-row";
     row.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(String(item.value))}</strong>`;
-    APP.dom.scoreboard.appendChild(row);
+    scoreboardFragment.appendChild(row);
   });
+  APP.dom.scoreboard.replaceChildren(scoreboardFragment);
 
   const isHost = snapshot.role === "host";
   APP.dom.hostNextRoundBtn.classList.toggle("hidden", !isHost);
@@ -1131,11 +1291,11 @@ function renderSummary(snapshot) {
 }
 
 function renderAwards(snapshot) {
-  clearInterval(APP.countdownTimer);
+  stopCountdown();
   APP.dom.awardsTitle.textContent = "今晚頒獎台";
   APP.dom.finaleHeading.textContent = snapshot.finale.heading;
   APP.dom.finaleBody.textContent = snapshot.finale.body;
-  APP.dom.podiumStage.innerHTML = "";
+  const podiumFragment = document.createDocumentFragment();
 
   snapshot.finale.podium.forEach((entry, index) => {
     const card = document.createElement("article");
@@ -1147,10 +1307,11 @@ function renderAwards(snapshot) {
       <div>${escapeHtml(entry.playerName)}</div>
       <span>${escapeHtml(entry.subtitle)}</span>
     `;
-    APP.dom.podiumStage.appendChild(card);
+    podiumFragment.appendChild(card);
   });
+  APP.dom.podiumStage.replaceChildren(podiumFragment);
 
-  APP.dom.awardsList.innerHTML = "";
+  const awardsFragment = document.createDocumentFragment();
   snapshot.finale.awards.forEach((entry) => {
     const row = document.createElement("article");
     row.className = "award-row";
@@ -1162,8 +1323,9 @@ function renderAwards(snapshot) {
       </div>
       <span class="result-chip ${entry.kind}">${escapeHtml(entry.label)}</span>
     `;
-    APP.dom.awardsList.appendChild(row);
+    awardsFragment.appendChild(row);
   });
+  APP.dom.awardsList.replaceChildren(awardsFragment);
 }
 
 function copyJoinLink() {
@@ -2122,6 +2284,17 @@ function clearLocalPendingState() {
   APP.localPending.roundStartedAt = null;
 }
 
+function resetTransientUiState() {
+  stopCountdown();
+  cancelQueuedRender();
+  APP.activeScreenId = null;
+  APP.renderSignature = "";
+  APP.lastSentSnapshotKeys.clear();
+  APP.lastToast.message = "";
+  APP.lastToast.shownAt = 0;
+  hideToast();
+}
+
 function reconcileLocalPendingState(snapshot) {
   if (!snapshot || snapshot.phase !== "round" || !snapshot.round) {
     clearLocalPendingState();
@@ -2164,10 +2337,11 @@ function restartApp() {
 }
 
 function destroyPeerState() {
-  clearInterval(APP.countdownTimer);
+  resetTransientUiState();
   clearTimeout(APP.hostDeadlineTimer);
   clearTimeout(APP.hostSyncTimer);
   clearTimeout(APP.joinAttemptTimer);
+  clearTimeout(APP.hostIntervalTimer);
   APP.hostConnections.forEach((conn) => {
     try {
       conn.close();
@@ -2198,6 +2372,8 @@ function destroyPeerState() {
   APP.selfId = "";
   APP.roomCode = "";
   APP.hostPeerId = "";
+  APP.hostDeadlineTimer = null;
+  APP.hostIntervalTimer = null;
   APP.hostSyncTimer = null;
   APP.joinAttemptTimer = null;
   clearJoinAttemptState();
