@@ -422,7 +422,7 @@ function attemptCreateHostPeer(profile, attempts) {
     wireHostPeer(peer);
     renderHostSnapshot();
     switchScreen("lobby-screen");
-    showToast("桌子開好啦，快把 QR Code 丟出去抓人。");
+    showToast("桌子開好啦，快把掃碼圖丟出去抓人。");
   });
 
   peer.on("error", (error) => {
