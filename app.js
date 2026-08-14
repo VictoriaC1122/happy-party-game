@@ -140,6 +140,12 @@ const ROUND_EVENT_DECK = [
     detail: "他理直氣壯地下結論：「不戴套就沒得聊。」這局不能選任何無套選項。"
   },
   {
+    icon: "🪡",
+    badge: "對方偷偷戳破套子",
+    detail: "你明明選了戴套，翻牌才發現套子早被偷偷戳破；戴套口交改判無套口交，戴套性交改判無套性交。",
+    actionTransform: "remove_condom"
+  },
+  {
     icon: "🕯️",
     badge: "突然停電",
     detail: "包廂突然黑掉，大家只剩緊急燈在那邊臉對臉，這局只要真的有互動，風險直接 x1.6。",
@@ -2204,7 +2210,7 @@ function chooseSoloTestAction(playerId) {
   return allowed[0] || "refuse";
 }
 
-function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0 }) {
+function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0, actionTransform: null }) {
   if (!partnerId) {
     return {
       hiddenIndices: [],
@@ -2216,7 +2222,8 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
       blockedActions: restriction.blockedActions.slice(),
       roundNotice: restriction.roundNotice,
       riskMultiplier: restriction.riskMultiplier,
-      riskBonus: restriction.riskBonus
+      riskBonus: restriction.riskBonus,
+      actionTransform: restriction.actionTransform || null
     };
   }
 
@@ -2255,7 +2262,8 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     blockedActions: restriction.blockedActions.slice(),
     roundNotice: restriction.roundNotice,
     riskMultiplier: restriction.riskMultiplier,
-    riskBonus: restriction.riskBonus
+    riskBonus: restriction.riskBonus,
+    actionTransform: restriction.actionTransform || null
   };
 }
 
@@ -2292,7 +2300,8 @@ function createRoundRestrictions(activeIds, pairs) {
     blockedActions: [],
     roundNotice: null,
     riskMultiplier: 1,
-    riskBonus: 0
+    riskBonus: 0,
+    actionTransform: null
   }]));
 
   pairs.forEach(([leftId, rightId]) => {
@@ -2301,13 +2310,15 @@ function createRoundRestrictions(activeIds, pairs) {
       blockedActions: event.blockedActions.slice(),
       roundNotice: event.roundNotice,
       riskMultiplier: event.riskMultiplier,
-      riskBonus: event.riskBonus
+      riskBonus: event.riskBonus,
+      actionTransform: event.actionTransform
     };
     restrictions[rightId] = {
       blockedActions: event.blockedActions.slice(),
       roundNotice: event.roundNotice,
       riskMultiplier: event.riskMultiplier,
-      riskBonus: event.riskBonus
+      riskBonus: event.riskBonus,
+      actionTransform: event.actionTransform
     };
   });
 
@@ -2320,7 +2331,8 @@ function createPairRoundEvent() {
       blockedActions: [],
       roundNotice: null,
       riskMultiplier: 1,
-      riskBonus: 0
+      riskBonus: 0,
+      actionTransform: null
     };
   }
 
@@ -2329,6 +2341,7 @@ function createPairRoundEvent() {
     blockedActions: picked?.blockedActions || [],
     riskMultiplier: picked?.riskMultiplier || 1,
     riskBonus: picked?.riskBonus || 0,
+    actionTransform: picked?.actionTransform || null,
     roundNotice: picked ? {
       icon: picked.icon,
       badge: picked.badge,
@@ -2769,11 +2782,19 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     const riskContext = {
       riskMultiplier: pairEffect.riskMultiplier || 1,
       riskBonus: pairEffect.riskBonus || 0,
-      roundNotice: pairEffect.roundNotice || null
+      roundNotice: pairEffect.roundNotice || null,
+      actionTransform: pairEffect.actionTransform || null
     };
-    const forceMajeureRisk = riskContext.riskMultiplier > 1 || riskContext.riskBonus > 0;
-    const resolvedActionKey = forcedRawSex ? "sex_raw" : resolveSharedAction(leftActionKey, rightActionKey);
+    const intendedActionKey = forcedRawSex ? "sex_raw" : resolveSharedAction(leftActionKey, rightActionKey);
+    const intendedAction = ACTIONS[intendedActionKey];
+    const condomWasPunctured = riskContext.actionTransform === "remove_condom" && intendedAction.condom;
+    const resolvedActionKey = condomWasPunctured
+      ? `${intendedAction.category}_raw`
+      : intendedActionKey;
     const resolvedAction = ACTIONS[resolvedActionKey];
+    const forceMajeureRisk = riskContext.riskMultiplier > 1
+      || riskContext.riskBonus > 0
+      || condomWasPunctured;
     publicStats.intimateEvents += 1;
     if (!resolvedAction.condom) {
       publicStats.riskyEvents += 1;
@@ -2806,10 +2827,14 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     }
 
     if (forceMajeureRisk && riskContext.roundNotice) {
-      leftSummary.chips.push({ label: "亂入加碼風險", kind: "warn" });
-      rightSummary.chips.push({ label: "亂入加碼風險", kind: "warn" });
-      leftSummary.notes.push(`這局碰上「${riskContext.roundNotice.badge}」，現場一亂，風險也跟著亂飛。`);
-      rightSummary.notes.push(`這局碰上「${riskContext.roundNotice.badge}」，現場一亂，風險也跟著亂飛。`);
+      const eventChip = condomWasPunctured ? "套子被戳破" : "亂入加碼風險";
+      leftSummary.chips.push({ label: eventChip, kind: "warn" });
+      rightSummary.chips.push({ label: eventChip, kind: "warn" });
+      const eventNote = condomWasPunctured
+        ? `你原本選「${intendedAction.shortLabel}」，翻牌才發現對方偷偷戳破套子，改判「${resolvedAction.shortLabel}」。`
+        : `這局碰上「${riskContext.roundNotice.badge}」，現場一亂，風險也跟著亂飛。`;
+      leftSummary.notes.push(eventNote);
+      rightSummary.notes.push(eventNote);
     }
 
     if (!leftInfectedBefore && left.isInfected && !left.detectedSelf) {
