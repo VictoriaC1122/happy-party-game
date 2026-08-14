@@ -1,6 +1,19 @@
 const STORAGE_KEY = "happy-party-profile-v1";
 const CONSENT_KEY = "happy-party-consent-v1";
 const HOST_PEER_PREFIX = "happy-party-host-";
+const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
+const TEST_BOT_NAMES = [
+  "陪測分身阿酒",
+  "氣氛組小王",
+  "亂入系阿桃",
+  "今晚很敢姐",
+  "先看看阿北",
+  "嘴很甜小美",
+  "滑進來老張",
+  "卡位系阿球",
+  "不演了阿森",
+  "戲很多小艾"
+];
 
 const APP = {
   dom: {},
@@ -15,6 +28,8 @@ const APP = {
   actionButtonNodes: [],
   countdownState: null,
   lastSentSnapshotKeys: new Map(),
+  testBotTimers: [],
+  testViewPlayerId: "",
   lastToast: {
     message: "",
     shownAt: 0
@@ -154,6 +169,16 @@ function initApp() {
 function cacheDom() {
   APP.dom = {
     screens: Array.from(document.querySelectorAll(".screen")),
+    testLabPanel: document.getElementById("test-lab-panel"),
+    testLabPill: document.getElementById("test-lab-pill"),
+    testViewSelect: document.getElementById("test-view-select"),
+    testHostViewBtn: document.getElementById("test-host-view-btn"),
+    testAdvanceBtn: document.getElementById("test-advance-btn"),
+    testLabHint: document.getElementById("test-lab-hint"),
+    testLabRoomCode: document.getElementById("test-lab-room-code"),
+    testLabJoinLink: document.getElementById("test-lab-join-link"),
+    testLabCopyBtn: document.getElementById("test-lab-copy-btn"),
+    testQrCode: document.getElementById("test-qr-code"),
     consentCheckbox: document.getElementById("consent-checkbox"),
     consentContinue: document.getElementById("consent-continue"),
     createRoomBtn: document.getElementById("create-room-btn"),
@@ -172,6 +197,7 @@ function cacheDom() {
     qrWrap: document.getElementById("qr-wrap"),
     qrCode: document.getElementById("qr-code"),
     copyLinkBtn: document.getElementById("copy-link-btn"),
+    soloTestBtn: document.getElementById("solo-test-btn"),
     startGameBtn: document.getElementById("start-game-btn"),
     hostControls: document.getElementById("host-controls"),
     playerCountDisplay: document.getElementById("player-count-display"),
@@ -241,11 +267,20 @@ function bindDomEvents() {
   APP.dom.createRoomBtn.addEventListener("click", handleCreateRoom);
   APP.dom.joinForm.addEventListener("submit", handleJoinSubmit);
   APP.dom.copyLinkBtn.addEventListener("click", copyJoinLink);
+  APP.dom.soloTestBtn.addEventListener("click", startSoloTestGame);
   APP.dom.startGameBtn.addEventListener("click", startHostedGame);
   APP.dom.chatBtn.addEventListener("click", handleChatReveal);
   APP.dom.testBtn.addEventListener("click", handleUseTestkit);
   APP.dom.hospitalBtn.addEventListener("click", () => submitAction("hospital"));
   APP.dom.hostNextRoundBtn.addEventListener("click", handleHostAdvance);
+  APP.dom.testViewSelect.addEventListener("change", (event) => {
+    setTestView(event.target.value);
+  });
+  APP.dom.testHostViewBtn.addEventListener("click", () => {
+    setTestView(APP.selfId);
+  });
+  APP.dom.testAdvanceBtn.addEventListener("click", handleHostAdvance);
+  APP.dom.testLabCopyBtn.addEventListener("click", copyJoinLink);
   APP.dom.restartBtn.addEventListener("click", restartApp);
 }
 
@@ -368,9 +403,100 @@ function createRenderSignature(snapshot) {
   });
 }
 
+function isHostTestMode() {
+  return APP.role === "host" && Boolean(APP.hostRoom?.testMode);
+}
+
+function buildSortedPlayers(room) {
+  return Object.values(room.players).sort((left, right) => left.joinedAt - right.joinedAt);
+}
+
+function getHostViewPlayerId() {
+  if (!isHostTestMode()) {
+    return APP.selfId;
+  }
+  if (APP.testViewPlayerId && APP.hostRoom?.players[APP.testViewPlayerId]) {
+    return APP.testViewPlayerId;
+  }
+  return APP.hostRoom?.hostId || APP.selfId;
+}
+
+function isLocalTestViewPlayer(playerId) {
+  return isHostTestMode() && playerId === getHostViewPlayerId();
+}
+
+function clearTestBotTimers() {
+  APP.testBotTimers.forEach((timerId) => clearTimeout(timerId));
+  APP.testBotTimers = [];
+}
+
+function setTestView(playerId) {
+  if (!isHostTestMode()) {
+    return;
+  }
+  const room = APP.hostRoom;
+  if (!room?.players[playerId] || playerId === room.hostId) {
+    APP.testViewPlayerId = "";
+  } else {
+    APP.testViewPlayerId = playerId;
+  }
+  syncTestLab();
+  renderHostSnapshot();
+}
+
+function syncTestLab() {
+  if (!APP.dom.testLabPanel) {
+    return;
+  }
+
+  const room = APP.hostRoom;
+  const visible = APP.role === "host" && Boolean(room?.testMode);
+  APP.dom.testLabPanel.classList.toggle("hidden", !visible);
+  if (!visible || !room) {
+    return;
+  }
+
+  const players = buildSortedPlayers(room);
+  const viewerId = getHostViewPlayerId();
+  const viewer = room.players[viewerId] || room.players[room.hostId];
+  const joinLink = buildJoinLink(room.roomCode);
+  const optionsFragment = document.createDocumentFragment();
+
+  players.forEach((player) => {
+    const option = document.createElement("option");
+    option.value = player.id;
+    option.textContent = formatTestViewLabel(player);
+    optionsFragment.appendChild(option);
+  });
+
+  APP.dom.testViewSelect.replaceChildren(optionsFragment);
+  APP.dom.testViewSelect.value = viewer?.id || room.hostId;
+  APP.dom.testLabRoomCode.textContent = room.roomCode;
+  APP.dom.testLabJoinLink.textContent = joinLink;
+  APP.dom.testLabPill.textContent = viewer?.isHost
+    ? "目前主揪視角"
+    : `現在偷看：${viewer?.name || "陪測分身"}`;
+  APP.dom.testHostViewBtn.disabled = viewer?.isHost ?? true;
+  APP.dom.testAdvanceBtn.classList.toggle("hidden", !(room.phase === "summary" && !viewer?.isHost));
+  APP.dom.testAdvanceBtn.textContent = room.roundIndex >= room.roundCount ? "直接開獎去" : "下一局，走起";
+  APP.dom.testLabHint.textContent = viewer?.isHost
+    ? "你現在看的是主揪總控畫面；想測玩家端，就切去任一陪測分身。"
+    : `你現在看的是 ${viewer?.name || "這位陪測分身"} 的畫面，出牌、偷測、去醫院都會直接算在這位頭上。`;
+  renderTestLabQr(joinLink);
+}
+
+function formatTestViewLabel(player) {
+  if (player.isHost) {
+    return `${player.avatar} 主揪本人`;
+  }
+  if (player.isBot) {
+    return `${player.avatar} ${player.name} · 陪測分身`;
+  }
+  return `${player.avatar} ${player.name}`;
+}
+
 function buildPublicPlayerList(room) {
-  return Object.values(room.players)
-    .sort((left, right) => left.joinedAt - right.joinedAt)
+  return buildSortedPlayers(room)
     .map((player) => {
       const result = room.finalResults ? room.finalResults[player.id] : null;
       return {
@@ -378,6 +504,7 @@ function buildPublicPlayerList(room) {
         name: player.name,
         avatar: player.avatar,
         isHost: player.isHost,
+        isBot: Boolean(player.isBot),
         online: player.online !== false,
         intimacyCount: player.intimacyCount,
         result
@@ -598,6 +725,8 @@ function createHostRoom(profile) {
   return {
     hostId: APP.selfId,
     roomCode: APP.roomCode,
+    testMode: false,
+    testBotIds: [],
     phase: "lobby",
     roundIndex: 0,
     roundCount: GAME_CONFIG.roundCount,
@@ -629,6 +758,7 @@ function createPlayerState(id, profile, isHost = false) {
     name: sanitizeName(profile.name || `玩家${Math.floor(Math.random() * 999)}`),
     avatar: sanitizeAvatar(profile.avatar),
     isHost,
+    isBot: false,
     online: true,
     joinedAt: Date.now(),
     desire: GAME_CONFIG.startDesire,
@@ -855,8 +985,7 @@ function flushHostSync() {
     return;
   }
   const sharedContext = buildSnapshotSharedContext(APP.hostRoom);
-  const hostSnapshot = buildSnapshotForPlayer(APP.selfId, sharedContext);
-  renderHostSnapshot(hostSnapshot);
+  renderHostSnapshot(sharedContext);
   APP.hostConnections.forEach((conn, playerId) => {
     if (conn.open && APP.hostRoom.players[playerId]) {
       const snapshot = buildSnapshotForPlayer(playerId, sharedContext);
@@ -871,13 +1000,15 @@ function flushHostSync() {
       });
     }
   });
+  syncTestLab();
 }
 
-function renderHostSnapshot(snapshot = null) {
-  if (!APP.hostRoom && !snapshot) {
+function renderHostSnapshot(sharedContext = null) {
+  if (!APP.hostRoom) {
     return;
   }
-  queueSnapshotRender(snapshot || buildSnapshotForPlayer(APP.selfId));
+  const viewerId = getHostViewPlayerId();
+  queueSnapshotRender(buildSnapshotForPlayer(viewerId, sharedContext || undefined));
 }
 
 function renderPlayerSnapshot(snapshot = null) {
@@ -918,6 +1049,7 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
     role: playerId === room.hostId ? "host" : "player",
     phase: room.phase,
     roomCode: room.roomCode,
+    testMode: Boolean(room.testMode),
     roundIndex: room.roundIndex,
     roundCount: room.roundCount,
     canStart: room.phase === "lobby" && activeLobbyPlayers(room).length >= GAME_CONFIG.minPlayers,
@@ -973,7 +1105,11 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
 }
 
 function buildJoinLink(roomCode) {
-  const base = new URL(window.location.href);
+  const isLocalPreview = window.location.protocol === "file:"
+    || window.location.hostname === "127.0.0.1"
+    || window.location.hostname === "localhost";
+  const baseSource = isLocalPreview ? PUBLIC_JOIN_BASE : window.location.href;
+  const base = new URL(baseSource);
   base.search = "";
   base.hash = "";
   base.searchParams.set("room", roomCode);
@@ -1051,7 +1187,10 @@ function renderLobby(snapshot) {
   APP.dom.joinLinkDisplay.textContent = snapshot.joinLink;
   APP.dom.playerCountDisplay.textContent = String(snapshot.players.length);
   APP.dom.startGameBtn.disabled = !snapshot.canStart;
+  APP.dom.startGameBtn.textContent = snapshot.testMode ? "陪測分身到齊，直接開喝" : "人齊就開喝";
   APP.dom.hostControls.classList.toggle("hidden", snapshot.role !== "host");
+  APP.dom.soloTestBtn.disabled = snapshot.testMode;
+  APP.dom.soloTestBtn.textContent = snapshot.testMode ? "單機測試已上線" : "單機測一把";
 
   if (snapshot.role === "host") {
     APP.dom.qrWrap.classList.remove("hidden");
@@ -1062,42 +1201,67 @@ function renderLobby(snapshot) {
 
   const fragment = document.createDocumentFragment();
   snapshot.players.forEach((player) => {
+    const identityLabel = player.isHost ? "主揪" : player.isBot ? "陪測分身" : "玩家";
+    const statusLabel = player.online ? (player.isBot ? "待命中" : "已卡位") : "斷線中";
     const row = document.createElement("article");
     row.className = `player-row${player.online ? "" : " offline"}`;
     row.innerHTML = `
       <div class="player-avatar">${player.avatar}</div>
       <div class="player-meta">
         <strong>${escapeHtml(player.name)}</strong>
-        <span>${player.isHost ? "主揪" : "玩家"}${player.online ? "" : " · 掉線"}</span>
+        <span>${identityLabel}${player.online ? "" : " · 掉線"}</span>
       </div>
-      <span class="phase-pill subtle">${player.online ? "已卡位" : "斷線中"}</span>
+      <span class="phase-pill subtle">${statusLabel}</span>
     `;
     fragment.appendChild(row);
   });
   APP.dom.playerList.replaceChildren(fragment);
 }
 
+function renderQrCanvas(target, link, width = 180) {
+  if (!target || !window.QRCode) {
+    return;
+  }
+  if (target.dataset.value === link && target.dataset.width === String(width)) {
+    return;
+  }
+  target.replaceChildren();
+  target.dataset.value = link;
+  target.dataset.width = String(width);
+  if (typeof QRCode.toCanvas === "function") {
+    QRCode.toCanvas(link, {
+      width,
+      margin: 1,
+      color: {
+        dark: "#23160c",
+        light: "#fff6eb"
+      }
+    }, (error, canvas) => {
+      if (!error && canvas) {
+        target.replaceChildren(canvas);
+      }
+    });
+    return;
+  }
+
+  if (typeof QRCode === "function") {
+    new QRCode(target, {
+      text: link,
+      width,
+      height: width,
+      colorDark: "#23160c",
+      colorLight: "#fff6eb",
+      correctLevel: QRCode.CorrectLevel?.H
+    });
+  }
+}
+
 function renderQrCode(link) {
-  if (!window.QRCode) {
-    return;
-  }
-  if (APP.dom.qrCode.dataset.value === link) {
-    return;
-  }
-  APP.dom.qrCode.replaceChildren();
-  APP.dom.qrCode.dataset.value = link;
-  QRCode.toCanvas(link, {
-    width: 180,
-    margin: 1,
-    color: {
-      dark: "#23160c",
-      light: "#fff6eb"
-    }
-  }, (error, canvas) => {
-    if (!error && canvas) {
-      APP.dom.qrCode.replaceChildren(canvas);
-    }
-  });
+  renderQrCanvas(APP.dom.qrCode, link, 180);
+}
+
+function renderTestLabQr(link) {
+  renderQrCanvas(APP.dom.testQrCode, link, 136);
 }
 
 function renderRound(snapshot) {
@@ -1338,6 +1502,54 @@ function copyJoinLink() {
     .catch(() => showToast("複製失敗，只好手動抄一下。"));
 }
 
+function createTestBotProfile(index) {
+  const baseName = TEST_BOT_NAMES[(index - 1) % TEST_BOT_NAMES.length];
+  const cycle = Math.floor((index - 1) / TEST_BOT_NAMES.length) + 1;
+  const suffix = cycle > 1 ? ` ${cycle}` : "";
+  return {
+    name: `${baseName}${suffix}`,
+    avatar: AVATARS[index % AVATARS.length]
+  };
+}
+
+function ensureSoloTestPlayers(room) {
+  room.testMode = true;
+  room.testBotIds = room.testBotIds || [];
+  const neededCount = Math.max(0, GAME_CONFIG.minPlayers - activeLobbyPlayers(room).length);
+
+  for (let index = 0; index < neededCount; index += 1) {
+    const botNumber = room.testBotIds.length + 1;
+    const botId = `happy-party-bot-${randomId(10)}`;
+    const bot = createPlayerState(botId, createTestBotProfile(botNumber), false);
+    bot.isBot = true;
+    bot.joinedAt = Date.now() + botNumber;
+    room.players[botId] = bot;
+    room.testBotIds.push(botId);
+  }
+}
+
+function startSoloTestGame() {
+  const room = APP.hostRoom;
+  if (!room || APP.role !== "host") {
+    return;
+  }
+  if (room.phase !== "lobby") {
+    showToast("這桌都已經開演了，單機測試要在開局前按。");
+    return;
+  }
+
+  const realGuests = Object.values(room.players).filter((player) => !player.isHost && !player.isBot);
+  if (realGuests.length > 0) {
+    showToast("現在有真人在場，先別偷切成單機測試。");
+    return;
+  }
+
+  ensureSoloTestPlayers(room);
+  APP.testViewPlayerId = "";
+  showToast("陪測分身已火速就位，現在一支手機也能把整桌跑完。");
+  startHostedGame();
+}
+
 function startHostedGame() {
   const room = APP.hostRoom;
   if (!room) {
@@ -1443,6 +1655,7 @@ function startHostRound() {
   };
   room.phase = "round";
   room.summary = null;
+  clearTestBotTimers();
 
   clearTimeout(APP.hostDeadlineTimer);
   APP.hostDeadlineTimer = setTimeout(() => {
@@ -1450,6 +1663,86 @@ function startHostRound() {
   }, GAME_CONFIG.roundDurationMs + 100);
 
   hostSyncAll({ immediate: true });
+  queueSoloTestBotsForRound();
+}
+
+function queueSoloTestBotsForRound() {
+  clearTestBotTimers();
+  const room = APP.hostRoom;
+  if (!room?.testMode || room.phase !== "round") {
+    return;
+  }
+
+  const currentViewId = getHostViewPlayerId();
+  shuffle(room.testBotIds.slice()).forEach((playerId, index) => {
+    if (!room.players[playerId]) {
+      return;
+    }
+    const bonusDelay = playerId === currentViewId ? 4200 : 0;
+    const delay = 3200 + (index * 650) + Math.floor(Math.random() * 2200) + bonusDelay;
+    const timerId = setTimeout(() => {
+      if (!APP.hostRoom?.testMode || APP.hostRoom.phase !== "round" || APP.hostRoom.round?.resolved) {
+        return;
+      }
+      if (APP.hostRoom.round.submissions[playerId]) {
+        return;
+      }
+      hostReceiveAction(playerId, chooseSoloTestAction(playerId));
+    }, delay);
+    APP.testBotTimers.push(timerId);
+  });
+}
+
+function chooseSoloTestAction(playerId) {
+  const room = APP.hostRoom;
+  const player = room?.players[playerId];
+  const partnerId = room?.round?.pairMap[playerId];
+  if (!room || !player) {
+    return "refuse";
+  }
+  if (!partnerId) {
+    return Math.random() < 0.28 ? "hospital" : "refuse";
+  }
+
+  const allowed = getAllowedActionsForPlayer(playerId);
+  if (!allowed.length) {
+    return "refuse";
+  }
+
+  const partnerView = buildPartnerView(playerId, partnerId);
+  const visibleRisk = partnerView.tags.filter((tag) => !tag.hidden && tag.color.startsWith("risk")).length;
+  const visibleSafety = partnerView.tags.filter((tag) => !tag.hidden && tag.color === "positive").length;
+  const testedDelta = partnerView.testedResult ? (partnerView.testedResult.infected ? -3 : 2) : 0;
+  const noticeDelta = partnerView.roundNotice ? -1 : 0;
+  const nerve = visibleRisk - visibleSafety - testedDelta - noticeDelta + Math.floor(player.anxiety / 18);
+  const heat = player.desire - Math.floor(player.anxiety / 2) - (visibleRisk * 7) + (visibleSafety * 5) + (testedDelta * 4);
+
+  if (nerve >= 4 && Math.random() < 0.45) {
+    return "hospital";
+  }
+  if (nerve >= 3 && Math.random() < 0.62) {
+    return "refuse";
+  }
+
+  const priority = heat >= 56
+    ? ["sex_raw", "oral_raw", "sex_condom", "oral_condom", "refuse"]
+    : heat >= 38
+      ? ["sex_condom", "oral_raw", "oral_condom", "sex_raw", "refuse"]
+      : ["oral_condom", "sex_condom", "refuse", "oral_raw", "sex_raw"];
+
+  for (const actionKey of priority) {
+    if (!allowed.includes(actionKey)) {
+      continue;
+    }
+    if (actionKey === "refuse") {
+      return actionKey;
+    }
+    if (Math.random() < 0.72) {
+      return actionKey;
+    }
+  }
+
+  return allowed[0] || "refuse";
 }
 
 function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0 }) {
@@ -1576,7 +1869,7 @@ function getAllowedActionsForPlayer(playerId) {
 
 function handleChatReveal() {
   if (APP.role === "host") {
-    hostRevealTag(APP.selfId);
+    hostRevealTag(getHostViewPlayerId());
     return;
   }
   if (APP.localPending.submission || APP.localPending.utility) {
@@ -1613,7 +1906,7 @@ function hostRevealTag(playerId) {
 
 function handleUseTestkit() {
   if (APP.role === "host") {
-    hostUseTestkit(APP.selfId);
+    hostUseTestkit(getHostViewPlayerId());
     return;
   }
   if (APP.localPending.submission || APP.localPending.utility) {
@@ -1654,7 +1947,7 @@ function hostUseTestkit(playerId) {
 
 function submitAction(actionKey) {
   if (APP.role === "host") {
-    hostReceiveAction(APP.selfId, actionKey);
+    hostReceiveAction(getHostViewPlayerId(), actionKey);
     return;
   }
   if (APP.localPending.submission || APP.localPending.utility) {
@@ -1676,12 +1969,20 @@ function hostReceiveAction(playerId, actionKey) {
   }
 
   const partnerId = room.round.pairMap[playerId];
-  if (!partnerId) {
-    if (actionKey !== "hospital") {
-      return;
-    }
+  if (actionKey === "hospital") {
     room.round.submissions[playerId] = "hospital";
     sendPrivateToast(playerId, `已鎖牌：${ACTIONS.hospital.shortLabel}`);
+    if (allRoundActionsSubmitted()) {
+      resolveHostedRound();
+      return;
+    }
+    hostSyncAll();
+    return;
+  }
+
+  if (!partnerId) {
+    room.round.submissions[playerId] = "refuse";
+    sendPrivateToast(playerId, `已鎖牌：${ACTIONS.refuse.shortLabel}`);
     hostSyncAll();
     return;
   }
@@ -1711,6 +2012,7 @@ function resolveHostedRound() {
     return;
   }
 
+  clearTestBotTimers();
   clearTimeout(APP.hostDeadlineTimer);
   room.round.resolved = true;
 
@@ -2287,9 +2589,11 @@ function clearLocalPendingState() {
 function resetTransientUiState() {
   stopCountdown();
   cancelQueuedRender();
+  clearTestBotTimers();
   APP.activeScreenId = null;
   APP.renderSignature = "";
   APP.lastSentSnapshotKeys.clear();
+  APP.testViewPlayerId = "";
   APP.lastToast.message = "";
   APP.lastToast.shownAt = 0;
   hideToast();
@@ -2313,7 +2617,7 @@ function reconcileLocalPendingState(snapshot) {
 }
 
 function sendPrivateToast(playerId, message) {
-  if (playerId === APP.selfId) {
+  if (playerId === APP.selfId || isLocalTestViewPlayer(playerId)) {
     showToast(message);
     return;
   }
@@ -2378,4 +2682,5 @@ function destroyPeerState() {
   APP.joinAttemptTimer = null;
   clearJoinAttemptState();
   clearLocalPendingState();
+  syncTestLab();
 }

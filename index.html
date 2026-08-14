@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chiron+Hei+HK:wght@400;500;700;800&family=DM+Sans:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260813j">
+  <link rel="stylesheet" href="./styles.css?v=20260814b">
 </head>
 <body>
   <div class="backdrop"></div>
@@ -29,6 +29,49 @@
         <span class="meta-pill">7 局翻牌</span>
       </div>
     </header>
+
+    <section id="test-lab-panel" class="panel test-lab hidden">
+      <div class="panel-head compact-head">
+        <div>
+          <p class="eyebrow">單機測試台</p>
+          <h2>一支手機也能整桌彩排</h2>
+        </div>
+        <span id="test-lab-pill" class="phase-pill subtle">目前主揪視角</span>
+      </div>
+      <div class="test-lab-grid">
+        <article class="notice-card">
+          <h3>切誰的畫面</h3>
+          <label class="field">
+            <span>現在想偷看誰</span>
+            <select id="test-view-select"></select>
+          </label>
+          <div class="actions-row">
+            <button id="test-host-view-btn" class="secondary-btn">回主揪視角</button>
+            <button id="test-advance-btn" class="primary-btn hidden">下一局，走起</button>
+          </div>
+          <p id="test-lab-hint" class="test-lab-hint">陪測分身會自己跑流程；你切到誰，現在看到的就是誰的畫面。</p>
+        </article>
+
+        <article class="notice-card test-join-card">
+          <h3>加入連結 QR</h3>
+          <div class="info-pair">
+            <span>房號</span>
+            <strong id="test-lab-room-code">------</strong>
+          </div>
+          <div class="info-pair">
+            <span>加入連結</span>
+            <strong id="test-lab-join-link">先開桌才會冒出來</strong>
+          </div>
+          <div class="qr-wrap mini-qr-wrap">
+            <div id="test-qr-code"></div>
+            <p>掃這張也能直接滑進來</p>
+          </div>
+          <div class="actions-row">
+            <button id="test-lab-copy-btn" class="ghost-btn">複製加入連結</button>
+          </div>
+        </article>
+      </div>
+    </section>
 
     <section id="consent-screen" class="panel screen active">
       <div class="panel-head">
@@ -151,6 +194,7 @@
           </div>
           <div class="actions-row" id="host-controls">
             <button id="copy-link-btn" class="secondary-btn">複製進場連結</button>
+            <button id="solo-test-btn" class="ghost-btn">單機測一把</button>
             <button id="start-game-btn" class="primary-btn" disabled>人齊就開喝</button>
           </div>
         </article>
@@ -305,8 +349,8 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="./data.js?v=20260813j"></script>
-  <script src="./app.js?v=20260813j"></script>
+  <script src="./vendor/qrcode.min.js?v=20260814b"></script>
+  <script src="./data.js?v=20260814b"></script>
+  <script src="./app.js?v=20260814b"></script>
 </body>
 </html>
