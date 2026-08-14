@@ -268,11 +268,11 @@ function cacheDom() {
     roundTitle: document.getElementById("round-title"),
     timerPill: document.getElementById("timer-pill"),
     selfRolePill: document.getElementById("self-role-pill"),
-    desireValue: document.getElementById("desire-value"),
+    satisfactionValue: document.getElementById("satisfaction-value"),
     anxietyValue: document.getElementById("anxiety-value"),
     intimacyValue: document.getElementById("intimacy-value"),
     testkitValue: document.getElementById("testkit-value"),
-    desireBar: document.getElementById("desire-bar"),
+    satisfactionBar: document.getElementById("satisfaction-bar"),
     anxietyBar: document.getElementById("anxiety-bar"),
     panicWarning: document.getElementById("panic-warning"),
     partnerAvatar: document.getElementById("partner-avatar"),
@@ -986,7 +986,7 @@ function createPlayerState(id, profile, isHost = false) {
     isBot: false,
     online: true,
     joinedAt: Date.now(),
-    desire: GAME_CONFIG.startDesire,
+    satisfaction: GAME_CONFIG.startSatisfaction,
     anxiety: GAME_CONFIG.startAnxiety,
     intimacyCount: 0,
     testkits: 1,
@@ -1363,7 +1363,7 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       id: me.id,
       name: me.name,
       avatar: me.avatar,
-      desire: me.desire,
+      satisfaction: me.satisfaction,
       anxiety: me.anxiety,
       intimacyCount: me.intimacyCount,
       testkits: me.testkits,
@@ -1443,6 +1443,7 @@ function buildPartnerView(playerId, partnerId) {
     flirt: partner.persona.flirt,
     testedResult: privateState.testedResult,
     roundNotice: privateState.roundNotice,
+    satisfactionBonusClues: privateState.satisfactionBonusClues || 0,
     constraints: partner.persona.constraints,
     tags
   };
@@ -1628,11 +1629,11 @@ function renderRound(snapshot) {
   const isLocked = Boolean(effectiveSubmission || pendingUtility || reconnecting);
   APP.dom.roundTitle.textContent = `Round ${snapshot.roundIndex} / ${snapshot.roundCount}`;
   APP.dom.selfRolePill.textContent = describeRolePill(self);
-  APP.dom.desireValue.textContent = `${self.desire}%`;
+  APP.dom.satisfactionValue.textContent = `${self.satisfaction}%`;
   APP.dom.anxietyValue.textContent = `${self.anxiety}%`;
   APP.dom.intimacyValue.textContent = String(self.intimacyCount);
   APP.dom.testkitValue.textContent = String(self.testkits);
-  APP.dom.desireBar.style.width = `${self.desire}%`;
+  APP.dom.satisfactionBar.style.width = `${self.satisfaction}%`;
   APP.dom.anxietyBar.style.width = `${self.anxiety}%`;
   APP.dom.panicWarning.classList.toggle("hidden", self.anxiety < GAME_CONFIG.panicThreshold);
 
@@ -1690,6 +1691,12 @@ function renderPartnerTags(partner, anxiety) {
     eventBadge.className = "tag tag-risk-soft";
     eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.roundNotice.icon || "🎲")}</span><span>${escapeHtml(`亂入事件：${partner.roundNotice.badge}`)}</span>`;
     fragment.appendChild(eventBadge);
+  }
+  if (partner.satisfactionBonusClues > 0) {
+    const satisfactionBadge = document.createElement("div");
+    satisfactionBadge.className = "tag tag-positive";
+    satisfactionBadge.innerHTML = `<span class="icon">💗</span><span>${escapeHtml(`滿足加碼：本局多看 ${partner.satisfactionBonusClues} 條線索`)}</span>`;
+    fragment.appendChild(satisfactionBadge);
   }
   APP.dom.partnerTags.replaceChildren(fragment);
 }
@@ -1872,8 +1879,8 @@ function renderAwards(snapshot) {
         <strong>${escapeHtml(resultLabel)}</strong>
       </div>
       <div class="replay-meters">
-        <span>還想玩 ${entry.postState.desire}%</span>
-        <span>心裡多慌 ${entry.postState.anxiety}%</span>
+        <span>滿足值 ${entry.postState.satisfaction}%</span>
+        <span>焦慮值 ${entry.postState.anxiety}%</span>
         <span>親密 ${entry.postState.intimacyCount} 次</span>
       </div>
     `;
@@ -1960,7 +1967,7 @@ function startHostedGame() {
   const activeIds = lobbyPlayers.map((player) => player.id);
   const shuffledIds = shuffle(activeIds);
   room.initialCarrierIds = shuffledIds.slice(0, Math.min(GAME_CONFIG.initialCarrierCount, shuffledIds.length));
-  room.pairSchedule = buildRandomPairSchedule(shuffledIds, GAME_CONFIG.roundCount);
+  room.pairSchedule = [];
   room.finalResults = null;
   room.finale = null;
   room.summary = null;
@@ -1968,7 +1975,7 @@ function startHostedGame() {
 
   activeIds.forEach((playerId) => {
     const player = room.players[playerId];
-    player.desire = GAME_CONFIG.startDesire;
+    player.satisfaction = GAME_CONFIG.startSatisfaction;
     player.anxiety = GAME_CONFIG.startAnxiety;
     player.intimacyCount = 0;
     player.testkits = 1;
@@ -1997,62 +2004,92 @@ function startHostedGame() {
   startHostRound();
 }
 
-function buildRandomPairSchedule(playerIds, rounds) {
-  const schedule = [];
+function buildNextRoundPairs(room, playerIds) {
   const pairCounts = new Map();
   const byeCounts = new Map(playerIds.map((playerId) => [playerId, 0]));
-  let previousPartners = new Map();
+  const previousPartners = new Map();
+  const previousRounds = room.pairSchedule || [];
 
-  for (let round = 0; round < rounds; round += 1) {
-    let bestCandidate = null;
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    for (let attempt = 0; attempt < 80; attempt += 1) {
-      const order = shuffle(playerIds);
-      const byePlayerId = order.length % 2 === 1 ? order.pop() : null;
-      const pairs = [];
-      let score = byePlayerId ? (byeCounts.get(byePlayerId) || 0) * 30 : 0;
-
-      for (let index = 0; index < order.length; index += 2) {
-        const left = order[index];
-        const right = order[index + 1];
-        const key = [left, right].sort().join("|");
-        score += (pairCounts.get(key) || 0) * 20;
-        if (previousPartners.get(left) === right) {
-          score += 60;
-        }
-        pairs.push([left, right]);
-      }
-
-      score += Math.random();
-      if (score < bestScore) {
-        bestScore = score;
-        bestCandidate = { pairs, byePlayerId };
-      }
-    }
-
-    const nextPartners = new Map();
-    bestCandidate.pairs.forEach(([left, right]) => {
+  previousRounds.forEach((pairs, roundIndex) => {
+    const pairedIds = new Set();
+    pairs.forEach(([left, right]) => {
       const key = [left, right].sort().join("|");
       pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
-      nextPartners.set(left, right);
-      nextPartners.set(right, left);
+      pairedIds.add(left);
+      pairedIds.add(right);
+      if (roundIndex === previousRounds.length - 1) {
+        previousPartners.set(left, right);
+        previousPartners.set(right, left);
+      }
     });
-    if (bestCandidate.byePlayerId) {
-      byeCounts.set(bestCandidate.byePlayerId, (byeCounts.get(bestCandidate.byePlayerId) || 0) + 1);
-    }
-    schedule.push(bestCandidate.pairs);
-    previousPartners = nextPartners;
+    playerIds.forEach((playerId) => {
+      if (!pairedIds.has(playerId)) {
+        byeCounts.set(playerId, (byeCounts.get(playerId) || 0) + 1);
+      }
+    });
+  });
+
+  const remaining = shuffle(playerIds);
+  if (remaining.length % 2 === 1) {
+    const lowestByeCount = Math.min(...remaining.map((playerId) => byeCounts.get(playerId) || 0));
+    const byeCandidates = remaining.filter((playerId) => (byeCounts.get(playerId) || 0) === lowestByeCount);
+    const byePlayerId = randomFrom(byeCandidates);
+    remaining.splice(remaining.indexOf(byePlayerId), 1);
   }
 
-  return schedule;
+  const pairs = [];
+  while (remaining.length > 1) {
+    const leftId = remaining.shift();
+    const candidates = remaining.map((rightId) => ({
+      playerId: rightId,
+      weight: calculatePairingWeight(room, leftId, rightId, pairCounts, previousPartners)
+    }));
+    const rightId = pickWeightedPlayer(candidates);
+    remaining.splice(remaining.indexOf(rightId), 1);
+    pairs.push([leftId, rightId]);
+  }
+
+  return pairs;
+}
+
+function calculatePairingWeight(room, leftId, rightId, pairCounts, previousPartners) {
+  const key = [leftId, rightId].sort().join("|");
+  const repeatCount = pairCounts.get(key) || 0;
+  let weight = 1 / (1 + repeatCount * 2.5);
+  if (previousPartners.get(leftId) === rightId) {
+    weight *= 0.12;
+  }
+  weight *= riskPairingWeight(room.players[leftId], room.players[rightId]);
+  weight *= riskPairingWeight(room.players[rightId], room.players[leftId]);
+  return Math.max(0.01, weight);
+}
+
+function riskPairingWeight(player, partner) {
+  if (!player || !partner?.isInfected) {
+    return 1;
+  }
+  const riskTilt = (player.anxiety - player.satisfaction) / 100;
+  return clamp(1 + riskTilt * GAME_CONFIG.riskPairingStrength, 0.35, 1.65);
+}
+
+function pickWeightedPlayer(candidates) {
+  const totalWeight = candidates.reduce((total, candidate) => total + candidate.weight, 0);
+  let cursor = Math.random() * totalWeight;
+  for (const candidate of candidates) {
+    cursor -= candidate.weight;
+    if (cursor <= 0) {
+      return candidate.playerId;
+    }
+  }
+  return candidates[candidates.length - 1].playerId;
 }
 
 function startHostRound() {
   const room = APP.hostRoom;
-  const pairs = room.pairSchedule[room.roundIndex - 1] || [];
   const pairMap = {};
   const activeIds = getGamePlayerIds(room);
+  const pairs = buildNextRoundPairs(room, activeIds);
+  room.pairSchedule[room.roundIndex - 1] = pairs;
   activeIds.forEach((playerId) => {
     pairMap[playerId] = null;
   });
@@ -2139,7 +2176,7 @@ function chooseSoloTestAction(playerId) {
   const testedDelta = partnerView.testedResult ? (partnerView.testedResult.infected ? -3 : 2) : 0;
   const noticeDelta = partnerView.roundNotice ? -1 : 0;
   const nerve = visibleRisk - visibleSafety - testedDelta - noticeDelta + Math.floor(player.anxiety / 18);
-  const heat = player.desire - Math.floor(player.anxiety / 2) - (visibleRisk * 7) + (visibleSafety * 5) + (testedDelta * 4);
+  const heat = (100 - player.satisfaction) - Math.floor(player.anxiety / 2) - (visibleRisk * 7) + (visibleSafety * 5) + (testedDelta * 4);
 
   if (nerve >= 4 && Math.random() < 0.45) {
     return "hospital";
@@ -2174,6 +2211,7 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     return {
       hiddenIndices: [],
       revealedIndices: [],
+      satisfactionBonusClues: 0,
       testedResult: null,
       blockedActions: restriction.blockedActions.slice(),
       roundNotice: restriction.roundNotice,
@@ -2182,6 +2220,7 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     };
   }
 
+  const player = APP.hostRoom.players[playerId];
   const partner = APP.hostRoom.players[partnerId];
   const hiddenIndices = [];
   partner.persona.tags.forEach((tag, index) => {
@@ -2194,9 +2233,16 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     hiddenIndices.pop();
   }
 
+  const satisfactionBonusClues = Math.min(
+    hiddenIndices.length,
+    Math.floor(player.satisfaction / GAME_CONFIG.satisfactionClueStep)
+  );
+  const adjustedHiddenIndices = shuffle(hiddenIndices).slice(satisfactionBonusClues);
+
   return {
-    hiddenIndices,
+    hiddenIndices: adjustedHiddenIndices,
     revealedIndices: [],
+    satisfactionBonusClues,
     testedResult: null,
     blockedActions: restriction.blockedActions.slice(),
     roundNotice: restriction.roundNotice,
@@ -2482,7 +2528,7 @@ function resolveHostedRound() {
             ? "你這局雖然放空，還是跑去醫院驗了一下，結果是你真的中獎了。"
             : "你這局雖然放空，還是跑去醫院驗了一下，結果目前還安全。",
           chips: [{ label: player.isInfected ? "真的中獎" : "目前安全", kind: player.isInfected ? "bad" : "good" }],
-          notes: ["醫院會讓你瞬間清醒，但回來只會更想玩。"]
+          notes: ["醫院讓焦慮值瞬間歸零，但今晚的滿足值也會往下掉。"]
         };
         return;
       }
@@ -2571,7 +2617,7 @@ function createReplayArchiveEntry(room, privateSummaries, publicStats) {
         infected: player.isInfected,
         detectedSelf: player.detectedSelf,
         intimacyCount: player.intimacyCount,
-        desire: player.desire,
+        satisfaction: player.satisfaction,
         anxiety: player.anxiety
       }
     };
@@ -2607,7 +2653,7 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
       ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
       : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     leftSummary.chips.push({ label: left.isInfected ? "真的中獎" : "目前安全", kind: left.isInfected ? "bad" : "good" });
-    leftSummary.notes.push("醫院會讓你瞬間清醒，但回來只會更想玩。");
+    leftSummary.notes.push("醫院讓焦慮值瞬間歸零，但今晚的滿足值也會往下掉。");
   }
 
   if (rightActionKey === "hospital") {
@@ -2617,7 +2663,7 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
       ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
       : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     rightSummary.chips.push({ label: right.isInfected ? "真的中獎" : "目前安全", kind: right.isInfected ? "bad" : "good" });
-    rightSummary.notes.push("醫院會讓你瞬間清醒，但回來只會更想玩。");
+    rightSummary.notes.push("醫院讓焦慮值瞬間歸零，但今晚的滿足值也會往下掉。");
   }
 
   const leftIntimacy = isIntimacyAction(leftActionKey);
@@ -2685,8 +2731,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyIntimacy(left, resolvedActionKey, leftPartnerWasInfected);
     applyIntimacy(right, resolvedActionKey, rightPartnerWasInfected);
 
-    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。玩心消了一點，但心裡也更慌了。`;
-    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。玩心消了一點，但心裡也更慌了。`;
+    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。滿足感升了一點，焦慮也跟著往上跑。`;
+    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。滿足感升了一點，焦慮也跟著往上跑。`;
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
 
@@ -2730,7 +2776,7 @@ function resolveSharedAction(leftActionKey, rightActionKey) {
 }
 
 function applyHospital(player) {
-  player.desire = clamp(player.desire + GAME_CONFIG.hospitalDesireCost, 0, 100);
+  player.satisfaction = clamp(player.satisfaction - GAME_CONFIG.hospitalSatisfactionLoss, 0, 100);
   player.anxiety = 0;
   player.detectedSelf = true;
   player.detectedInfected = player.isInfected;
@@ -2738,19 +2784,19 @@ function applyHospital(player) {
 }
 
 function applyRefuse(player) {
-  player.desire = clamp(player.desire + GAME_CONFIG.refuseDesireCost, 0, 100);
+  player.satisfaction = clamp(player.satisfaction - GAME_CONFIG.refuseSatisfactionLoss, 0, 100);
   player.anxiety = finalizeAnxiety(player.anxiety);
 }
 
 function applyFailedAttempt(player) {
-  player.desire = clamp(player.desire + GAME_CONFIG.failedAttemptDesireCost, 0, 100);
+  player.satisfaction = clamp(player.satisfaction - GAME_CONFIG.failedAttemptSatisfactionLoss, 0, 100);
   player.anxiety = finalizeAnxiety(player.anxiety + GAME_CONFIG.failedAttemptAnxietyGain);
   player.stats.failedAttempts += 1;
 }
 
 function applyIntimacy(player, actionKey, partnerWasInfected) {
   const action = ACTIONS[actionKey];
-  player.desire = clamp(player.desire + GAME_CONFIG.passiveDesireGain - action.desireReward, 0, 100);
+  player.satisfaction = clamp(player.satisfaction + action.satisfactionGain, 0, 100);
   player.anxiety = finalizeAnxiety(player.anxiety + action.anxietyGain);
   player.intimacyCount += 1;
   player.stats.successfulIntimacies += 1;
