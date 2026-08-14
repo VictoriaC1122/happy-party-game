@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260814q">
+  <link rel="stylesheet" href="./styles.css?v=20260815b">
   <script defer src="./data.js?v=20260815a"></script>
-  <script defer src="./app.js?v=20260815b"></script>
+  <script defer src="./app.js?v=20260815c"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -44,9 +44,27 @@
           </label>
           <div class="actions-row">
             <button id="test-host-view-btn" class="secondary-btn">回主揪視角</button>
+            <button id="test-carrier-btn" class="carrier-test-btn">模擬帶原者視角</button>
             <button id="test-advance-btn" class="primary-btn hidden">下一局，走起</button>
           </div>
           <p id="test-lab-hint" class="test-lab-hint">陪測分身會自己跑流程；你切到誰，現在看到的就是誰的畫面。</p>
+          <article id="test-carrier-panel" class="test-carrier-panel hidden">
+            <div class="carrier-test-head">
+              <div>
+                <p class="eyebrow">模擬帶原者測試畫面</p>
+                <h3><span id="test-carrier-avatar">🦠</span> <span id="test-carrier-name">還在抽人</span></h3>
+              </div>
+              <span class="phase-pill warm">主揪透視限定</span>
+            </div>
+            <p class="carrier-test-copy">正式玩家仍只會看到「感染狀態：未知」；這張面板只給單機測試檢查帶原者流程。</p>
+            <div class="carrier-test-stats">
+              <div><span>測試身分</span><strong>初始帶原者</strong></div>
+              <div><span>目前狀態</span><strong id="test-carrier-infection">已感染</strong></div>
+              <div><span>已傳播</span><strong id="test-carrier-transmissions">0 次</strong></div>
+              <div><span>親密互動</span><strong id="test-carrier-intimacy">0 次</strong></div>
+            </div>
+            <p class="carrier-test-mission">陣營任務：讓所有有過親密互動的人在終局感染，6 位初始帶原者就一起站上頒獎台。</p>
+          </article>
         </article>
 
         <article class="notice-card test-join-card">

@@ -44,6 +44,7 @@ const APP = {
   lobbyPlayerIds: new Set(),
   testBotTimers: [],
   testViewPlayerId: "",
+  testCarrierPreviewActive: false,
   lastToast: {
     message: "",
     shownAt: 0
@@ -246,12 +247,19 @@ function cacheDom() {
     testLabPill: document.getElementById("test-lab-pill"),
     testViewSelect: document.getElementById("test-view-select"),
     testHostViewBtn: document.getElementById("test-host-view-btn"),
+    testCarrierBtn: document.getElementById("test-carrier-btn"),
     testAdvanceBtn: document.getElementById("test-advance-btn"),
     testLabHint: document.getElementById("test-lab-hint"),
     testLabRoomCode: document.getElementById("test-lab-room-code"),
     testLabJoinLink: document.getElementById("test-lab-join-link"),
     testLabCopyBtn: document.getElementById("test-lab-copy-btn"),
     testQrCode: document.getElementById("test-qr-code"),
+    testCarrierPanel: document.getElementById("test-carrier-panel"),
+    testCarrierAvatar: document.getElementById("test-carrier-avatar"),
+    testCarrierName: document.getElementById("test-carrier-name"),
+    testCarrierInfection: document.getElementById("test-carrier-infection"),
+    testCarrierTransmissions: document.getElementById("test-carrier-transmissions"),
+    testCarrierIntimacy: document.getElementById("test-carrier-intimacy"),
     consentCheckbox: document.getElementById("consent-checkbox"),
     consentContinue: document.getElementById("consent-continue"),
     createRoomBtn: document.getElementById("create-room-btn"),
@@ -360,6 +368,7 @@ function bindDomEvents() {
   APP.dom.testHostViewBtn.addEventListener("click", () => {
     setTestView(APP.selfId);
   });
+  APP.dom.testCarrierBtn.addEventListener("click", activateCarrierTestView);
   APP.dom.testAdvanceBtn.addEventListener("click", handleHostAdvance);
   APP.dom.testLabCopyBtn.addEventListener("click", copyJoinLink);
   APP.dom.restartBtn.addEventListener("click", restartApp);
@@ -751,9 +760,12 @@ function handlePlayerConnectionDropped(conn, message) {
   schedulePlayerReconnect(message);
 }
 
-function setTestView(playerId) {
+function setTestView(playerId, options = {}) {
   if (!isHostTestMode()) {
     return;
+  }
+  if (!options.keepCarrierPreview) {
+    APP.testCarrierPreviewActive = false;
   }
   const room = APP.hostRoom;
   if (!room?.players[playerId] || playerId === room.hostId) {
@@ -761,8 +773,41 @@ function setTestView(playerId) {
   } else {
     APP.testViewPlayerId = playerId;
   }
+  APP.renderSignature = "";
   syncTestLab();
   renderHostSnapshot();
+}
+
+function findNextCarrierTestPlayer(room, viewerId, shouldCycle) {
+  const carriers = (room?.initialCarrierIds || [])
+    .map((playerId) => room.players[playerId])
+    .filter(Boolean);
+  if (!carriers.length) {
+    return null;
+  }
+  if (shouldCycle) {
+    const currentIndex = carriers.findIndex((player) => player.id === viewerId);
+    if (currentIndex >= 0) {
+      return carriers[(currentIndex + 1) % carriers.length];
+    }
+  }
+  return carriers.find((player) => !player.isHost) || carriers[0];
+}
+
+function activateCarrierTestView() {
+  if (!isHostTestMode()) {
+    return;
+  }
+  const room = APP.hostRoom;
+  const viewerId = getHostViewPlayerId();
+  const carrier = findNextCarrierTestPlayer(room, viewerId, APP.testCarrierPreviewActive);
+  if (!carrier) {
+    showToast("帶原者還沒抽出來，等開局再按一次。");
+    return;
+  }
+  APP.testCarrierPreviewActive = true;
+  setTestView(carrier.id, { keepCarrierPreview: true });
+  showToast(`現在透視 ${carrier.name} 的帶原者視角。`);
 }
 
 function syncTestLab() {
@@ -780,6 +825,7 @@ function syncTestLab() {
   const players = buildSortedPlayers(room);
   const viewerId = getHostViewPlayerId();
   const viewer = room.players[viewerId] || room.players[room.hostId];
+  const carrierPreview = APP.testCarrierPreviewActive && viewer?.isCarrier ? viewer : null;
   const joinLink = buildJoinLink(room.roomCode);
   const optionsFragment = document.createDocumentFragment();
 
@@ -797,23 +843,37 @@ function syncTestLab() {
   APP.dom.testLabPill.textContent = viewer?.isHost
     ? "目前主揪視角"
     : `現在偷看：${viewer?.name || "陪測分身"}`;
+  if (carrierPreview) {
+    APP.dom.testLabPill.textContent = `模擬帶原者：${carrierPreview.name}`;
+  }
   APP.dom.testHostViewBtn.disabled = viewer?.isHost ?? true;
+  APP.dom.testCarrierBtn.disabled = !(room.initialCarrierIds || []).length;
+  APP.dom.testCarrierBtn.textContent = carrierPreview ? "換下一位帶原者" : "模擬帶原者視角";
   APP.dom.testAdvanceBtn.classList.toggle("hidden", !(room.phase === "summary" && !viewer?.isHost));
   APP.dom.testAdvanceBtn.textContent = room.roundIndex >= room.roundCount ? "直接開獎去" : "下一局，走起";
   APP.dom.testLabHint.textContent = viewer?.isHost
     ? "你現在看的是主揪總控畫面；想測玩家端，就切去任一陪測分身。"
     : `你現在看的是 ${viewer?.name || "這位陪測分身"} 的畫面，出牌、偷測、去醫院都會直接算在這位頭上。`;
+  APP.dom.testCarrierPanel.classList.toggle("hidden", !carrierPreview);
+  if (carrierPreview) {
+    APP.dom.testCarrierAvatar.textContent = carrierPreview.avatar;
+    APP.dom.testCarrierName.textContent = carrierPreview.name;
+    APP.dom.testCarrierInfection.textContent = carrierPreview.isInfected ? "已感染" : "目前健康";
+    APP.dom.testCarrierTransmissions.textContent = `${carrierPreview.transmissionCount} 次`;
+    APP.dom.testCarrierIntimacy.textContent = `${carrierPreview.intimacyCount} 次`;
+  }
   renderTestLabQr(joinLink);
 }
 
 function formatTestViewLabel(player) {
+  const carrierLabel = APP.testCarrierPreviewActive && player.isCarrier ? " · 帶原者" : "";
   if (player.isHost) {
-    return `${player.avatar} 主揪本人`;
+    return `${player.avatar} 主揪本人${carrierLabel}`;
   }
   if (player.isBot) {
-    return `${player.avatar} ${player.name} · 陪測分身`;
+    return `${player.avatar} ${player.name} · 陪測分身${carrierLabel}`;
   }
-  return `${player.avatar} ${player.name}`;
+  return `${player.avatar} ${player.name}${carrierLabel}`;
 }
 
 function buildPublicPlayerList(room) {
@@ -1744,7 +1804,10 @@ function renderRound(snapshot) {
   const effectiveSubmission = round.submission || pendingSubmission;
   const isLocked = Boolean(effectiveSubmission || pendingUtility || reconnecting);
   APP.dom.roundTitle.textContent = `Round ${snapshot.roundIndex} / ${snapshot.roundCount}`;
-  APP.dom.selfRolePill.textContent = describeRolePill(self);
+  const carrierPreview = isHostTestMode()
+    && APP.testCarrierPreviewActive
+    && APP.hostRoom?.players[getHostViewPlayerId()]?.isCarrier;
+  APP.dom.selfRolePill.textContent = carrierPreview ? "測試透視：初始帶原者" : describeRolePill(self);
   APP.dom.dissatisfactionValue.textContent = `${self.dissatisfaction}%`;
   APP.dom.healthAnxietyValue.textContent = `${self.healthAnxiety}%`;
   APP.dom.intimacyValue.textContent = String(self.intimacyCount);
@@ -2061,6 +2124,7 @@ function startSoloTestGame() {
 
   ensureSoloTestPlayers(room);
   APP.testViewPlayerId = "";
+  APP.testCarrierPreviewActive = false;
   hostSyncAll({ immediate: true });
   showToast("陪測分身正在跳上玩家牆，馬上開演。");
   setTimeout(() => {
@@ -3505,6 +3569,7 @@ function resetTransientUiState() {
   APP.renderSignature = "";
   APP.lastSentSnapshotKeys.clear();
   APP.testViewPlayerId = "";
+  APP.testCarrierPreviewActive = false;
   APP.lastToast.message = "";
   APP.lastToast.shownAt = 0;
   hideToast();
