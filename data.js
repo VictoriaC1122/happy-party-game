@@ -2,7 +2,7 @@ const GAME_CONFIG = {
   title: "快樂酒局派對遊戲",
   minPlayers: 8,
   maxPlayers: 40,
-  roundCount: 7,
+  roundCount: 10,
   initialCarrierCount: 6,
   roundDurationMs: 75 * 1000,
   startDesire: 45,

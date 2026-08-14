@@ -941,6 +941,7 @@ function createPlayerState(id, profile, isHost = false) {
     isCarrier: false,
     isInfected: false,
     detectedSelf: false,
+    detectedInfected: null,
     infectionSourceId: null,
     infectionRound: null,
     transmissionCount: 0,
@@ -1306,9 +1307,8 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       anxiety: me.anxiety,
       intimacyCount: me.intimacyCount,
       testkits: me.testkits,
-      isCarrier: me.isCarrier,
       detectedSelf: me.detectedSelf,
-      detectedInfected: me.detectedSelf ? me.isInfected : null
+      detectedInfected: me.detectedSelf ? me.detectedInfected : null
     }
   };
 
@@ -1539,7 +1539,7 @@ function renderRound(snapshot) {
   const reconnecting = snapshot.role === "player" && APP.playerReconnectActive;
   const effectiveSubmission = round.submission || pendingSubmission;
   const isLocked = Boolean(effectiveSubmission || pendingUtility || reconnecting);
-  APP.dom.roundTitle.textContent = `第 ${snapshot.roundIndex} 局 / ${snapshot.roundCount}`;
+  APP.dom.roundTitle.textContent = `Round ${snapshot.roundIndex} / ${snapshot.roundCount}`;
   APP.dom.selfRolePill.textContent = describeRolePill(self);
   APP.dom.desireValue.textContent = `${self.desire}%`;
   APP.dom.anxietyValue.textContent = `${self.anxiety}%`;
@@ -1687,16 +1687,13 @@ function startCountdown(deadlineAt, progress, isHost) {
 }
 
 function describeRolePill(self) {
-  if (self.isCarrier) {
-    return "你就是開場那 6 個帶原者之一";
-  }
   if (self.detectedSelf && self.detectedInfected) {
-    return "醫院說：你中獎了";
+    return "上次檢測：陽性";
   }
   if (self.detectedSelf && !self.detectedInfected) {
-    return "醫院說：你目前安全";
+    return "上次檢測：陰性";
   }
-  return "你開場是健康人，還沒去驗";
+  return "感染狀態：未知";
 }
 
 function renderSummary(snapshot) {
@@ -1900,7 +1897,7 @@ function startHostedGame() {
   const activeIds = lobbyPlayers.map((player) => player.id);
   const shuffledIds = shuffle(activeIds);
   room.initialCarrierIds = shuffledIds.slice(0, Math.min(GAME_CONFIG.initialCarrierCount, shuffledIds.length));
-  room.pairSchedule = buildRoundRobin(shuffledIds, GAME_CONFIG.roundCount);
+  room.pairSchedule = buildRandomPairSchedule(shuffledIds, GAME_CONFIG.roundCount);
   room.finalResults = null;
   room.finale = null;
   room.summary = null;
@@ -1915,6 +1912,7 @@ function startHostedGame() {
     player.isCarrier = room.initialCarrierIds.includes(playerId);
     player.isInfected = player.isCarrier;
     player.detectedSelf = false;
+    player.detectedInfected = null;
     player.infectionSourceId = player.isCarrier ? playerId : null;
     player.infectionRound = player.isCarrier ? 0 : null;
     player.transmissionCount = 0;
@@ -1936,27 +1934,54 @@ function startHostedGame() {
   startHostRound();
 }
 
-function buildRoundRobin(playerIds, rounds) {
-  const players = [...playerIds];
-  if (players.length % 2 === 1) {
-    players.push(null);
-  }
-  let rotation = [...players];
+function buildRandomPairSchedule(playerIds, rounds) {
   const schedule = [];
-  const totalRounds = Math.min(rounds, rotation.length - 1);
+  const pairCounts = new Map();
+  const byeCounts = new Map(playerIds.map((playerId) => [playerId, 0]));
+  let previousPartners = new Map();
 
-  for (let round = 0; round < totalRounds; round += 1) {
-    const pairs = [];
-    for (let index = 0; index < rotation.length / 2; index += 1) {
-      const left = rotation[index];
-      const right = rotation[rotation.length - 1 - index];
-      if (left && right) {
+  for (let round = 0; round < rounds; round += 1) {
+    let bestCandidate = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const order = shuffle(playerIds);
+      const byePlayerId = order.length % 2 === 1 ? order.pop() : null;
+      const pairs = [];
+      let score = byePlayerId ? (byeCounts.get(byePlayerId) || 0) * 30 : 0;
+
+      for (let index = 0; index < order.length; index += 2) {
+        const left = order[index];
+        const right = order[index + 1];
+        const key = [left, right].sort().join("|");
+        score += (pairCounts.get(key) || 0) * 20;
+        if (previousPartners.get(left) === right) {
+          score += 60;
+        }
         pairs.push([left, right]);
       }
+
+      score += Math.random();
+      if (score < bestScore) {
+        bestScore = score;
+        bestCandidate = { pairs, byePlayerId };
+      }
     }
-    schedule.push(pairs);
-    rotation = [rotation[0], rotation[rotation.length - 1], ...rotation.slice(1, rotation.length - 1)];
+
+    const nextPartners = new Map();
+    bestCandidate.pairs.forEach(([left, right]) => {
+      const key = [left, right].sort().join("|");
+      pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+      nextPartners.set(left, right);
+      nextPartners.set(right, left);
+    });
+    if (bestCandidate.byePlayerId) {
+      byeCounts.set(bestCandidate.byePlayerId, (byeCounts.get(bestCandidate.byePlayerId) || 0) + 1);
+    }
+    schedule.push(bestCandidate.pairs);
+    previousPartners = nextPartners;
   }
+
   return schedule;
 }
 
@@ -2645,6 +2670,7 @@ function applyHospital(player) {
   player.desire = clamp(player.desire + GAME_CONFIG.hospitalDesireCost, 0, 100);
   player.anxiety = 0;
   player.detectedSelf = true;
+  player.detectedInfected = player.isInfected;
   player.stats.hospitals += 1;
 }
 
