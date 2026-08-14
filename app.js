@@ -48,6 +48,11 @@ const APP = {
     message: "",
     shownAt: 0
   },
+  eventModalQueue: [],
+  eventModalOpen: false,
+  currentEventModal: null,
+  eventModalPreviousFocus: null,
+  shownEventModalKeys: new Set(),
   renderSignature: "",
   roomCode: "",
   hostPeerId: "",
@@ -304,6 +309,12 @@ function cacheDom() {
     replayList: document.getElementById("replay-list"),
     awardsList: document.getElementById("awards-list"),
     restartBtn: document.getElementById("restart-btn"),
+    eventModal: document.getElementById("event-modal"),
+    eventModalIcon: document.getElementById("event-modal-icon"),
+    eventModalKicker: document.getElementById("event-modal-kicker"),
+    eventModalTitle: document.getElementById("event-modal-title"),
+    eventModalBody: document.getElementById("event-modal-body"),
+    eventModalClose: document.getElementById("event-modal-close"),
     toast: document.getElementById("toast")
   };
 }
@@ -352,6 +363,12 @@ function bindDomEvents() {
   APP.dom.testAdvanceBtn.addEventListener("click", handleHostAdvance);
   APP.dom.testLabCopyBtn.addEventListener("click", copyJoinLink);
   APP.dom.restartBtn.addEventListener("click", restartApp);
+  APP.dom.eventModalClose.addEventListener("click", closeEventModal);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && APP.eventModalOpen) {
+      closeEventModal();
+    }
+  });
 }
 
 function hydrateConsent() {
@@ -456,6 +473,94 @@ function hideToast() {
   clearTimeout(APP.dom.toast._timer);
   APP.dom.toast._timer = null;
   APP.dom.toast.classList.add("hidden");
+}
+
+function queueEventModal(event) {
+  const normalized = normalizeEventModal(event);
+  if (!normalized || APP.shownEventModalKeys.has(normalized.id)) {
+    return;
+  }
+  APP.shownEventModalKeys.add(normalized.id);
+  APP.eventModalQueue.push(normalized);
+  showNextEventModal();
+}
+
+function normalizeEventModal(event) {
+  const id = String(event?.id || "").trim();
+  const title = String(event?.title || "").trim();
+  const body = String(event?.body || "").trim();
+  if (!id || !title || !body) {
+    return null;
+  }
+  return {
+    id,
+    icon: String(event.icon || "🎲").trim() || "🎲",
+    kicker: String(event.kicker || "本局強制事件").trim() || "本局強制事件",
+    title,
+    body
+  };
+}
+
+function showNextEventModal() {
+  if (APP.eventModalOpen || APP.eventModalQueue.length === 0 || !APP.dom.eventModal) {
+    return;
+  }
+  const event = APP.eventModalQueue.shift();
+  APP.currentEventModal = event;
+  APP.eventModalOpen = true;
+  if (!APP.eventModalPreviousFocus) {
+    APP.eventModalPreviousFocus = document.activeElement;
+  }
+  APP.dom.eventModalIcon.textContent = event.icon;
+  APP.dom.eventModalKicker.textContent = event.kicker;
+  APP.dom.eventModalTitle.textContent = event.title;
+  APP.dom.eventModalBody.textContent = event.body;
+  APP.dom.eventModal.classList.remove("hidden");
+  APP.dom.eventModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("event-modal-open");
+  requestAnimationFrame(() => APP.dom.eventModalClose.focus({ preventScroll: true }));
+}
+
+function closeEventModal() {
+  if (!APP.eventModalOpen || !APP.dom.eventModal) {
+    return;
+  }
+  APP.eventModalOpen = false;
+  APP.currentEventModal = null;
+  APP.dom.eventModal.classList.add("hidden");
+  APP.dom.eventModal.setAttribute("aria-hidden", "true");
+
+  if (APP.eventModalQueue.length > 0) {
+    requestAnimationFrame(showNextEventModal);
+    return;
+  }
+
+  document.body.classList.remove("event-modal-open");
+  const previousFocus = APP.eventModalPreviousFocus;
+  APP.eventModalPreviousFocus = null;
+  if (previousFocus?.isConnected && typeof previousFocus.focus === "function") {
+    previousFocus.focus({ preventScroll: true });
+  }
+}
+
+function clearEventModals() {
+  APP.eventModalQueue = [];
+  APP.eventModalOpen = false;
+  APP.currentEventModal = null;
+  APP.eventModalPreviousFocus = null;
+  APP.shownEventModalKeys.clear();
+  document.body.classList.remove("event-modal-open");
+  if (APP.dom.eventModal) {
+    APP.dom.eventModal.classList.add("hidden");
+    APP.dom.eventModal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function queueSnapshotEventModals(events) {
+  if (!Array.isArray(events)) {
+    return;
+  }
+  events.forEach(queueEventModal);
 }
 
 function createSnapshotSignature(snapshot) {
@@ -1388,6 +1493,7 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       submission: room.round.submissions[playerId] || null,
       availableActions: getAllowedActionsForPlayer(playerId),
       actionLocks: getActionLocksForPlayer(playerId),
+      eventModals: buildRoundEventModals(privateStateForPlayer(room, playerId), room.roundIndex, playerId),
       submissionProgress: shared.round.submissionProgress
     };
   }
@@ -1483,7 +1589,8 @@ function fallbackSummary() {
     title: "這局收攤",
     body: "等主揪一聲令下再往下走。",
     chips: [],
-    notes: []
+    notes: [],
+    eventModals: []
   };
 }
 
@@ -1502,11 +1609,13 @@ function renderSnapshot(snapshot) {
   if (snapshot.phase === "round") {
     renderRound(snapshot);
     switchScreen("round-screen");
+    queueSnapshotEventModals(snapshot.round.eventModals);
     return;
   }
   if (snapshot.phase === "summary") {
     renderSummary(snapshot);
     switchScreen("summary-screen");
+    queueSnapshotEventModals(snapshot.summary.private.eventModals);
     return;
   }
   if (snapshot.phase === "awards") {
@@ -2131,6 +2240,36 @@ function startHostRound() {
   queueSoloTestBotsForRound();
 }
 
+function privateStateForPlayer(room, playerId) {
+  return room.round?.private?.[playerId] || {};
+}
+
+function buildRoundEventModals(privateState, roundIndex, playerId) {
+  const events = [];
+  const roundNotice = privateState?.roundNotice;
+  if (roundNotice && privateState.actionTransform !== "remove_condom") {
+    events.push({
+      id: `round-${roundIndex}-${playerId}-random-event`,
+      icon: roundNotice.icon,
+      kicker: "現場突然亂入",
+      title: roundNotice.badge,
+      body: roundNotice.detail
+    });
+  }
+
+  const dissatisfactionEvent = privateState?.dissatisfactionEvent;
+  if (dissatisfactionEvent) {
+    events.push({
+      id: `round-${roundIndex}-${playerId}-dissatisfaction-event`,
+      icon: dissatisfactionEvent.icon,
+      kicker: "欲求不滿失控",
+      title: dissatisfactionEvent.badge,
+      body: dissatisfactionEvent.detail
+    });
+  }
+  return events;
+}
+
 function queueSoloTestBotsForRound() {
   clearTestBotTimers();
   const room = APP.hostRoom;
@@ -2708,8 +2847,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
   const room = APP.hostRoom;
   const left = room.players[leftId];
   const right = room.players[rightId];
-  const leftSummary = { title: `第 ${roundIndex} 局翻牌`, body: "", chips: [], notes: [] };
-  const rightSummary = { title: `第 ${roundIndex} 局翻牌`, body: "", chips: [], notes: [] };
+  const leftSummary = { title: `第 ${roundIndex} 局翻牌`, body: "", chips: [], notes: [], eventModals: [] };
+  const rightSummary = { title: `第 ${roundIndex} 局翻牌`, body: "", chips: [], notes: [], eventModals: [] };
   const publicStats = {
     intimateEvents: 0,
     riskyEvents: 0,
@@ -2835,6 +2974,22 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
         : `這局碰上「${riskContext.roundNotice.badge}」，現場一亂，風險也跟著亂飛。`;
       leftSummary.notes.push(eventNote);
       rightSummary.notes.push(eventNote);
+      if (condomWasPunctured) {
+        leftSummary.eventModals.push({
+          id: `round-${roundIndex}-${leftId}-punctured-condom`,
+          icon: riskContext.roundNotice.icon,
+          kicker: "翻牌強制事件",
+          title: riskContext.roundNotice.badge,
+          body: eventNote
+        });
+        rightSummary.eventModals.push({
+          id: `round-${roundIndex}-${rightId}-punctured-condom`,
+          icon: riskContext.roundNotice.icon,
+          kicker: "翻牌強制事件",
+          title: riskContext.roundNotice.badge,
+          body: eventNote
+        });
+      }
     }
 
     if (!leftInfectedBefore && left.isInfected && !left.detectedSelf) {
@@ -3322,6 +3477,7 @@ function resetTransientUiState() {
   APP.lastToast.message = "";
   APP.lastToast.shownAt = 0;
   hideToast();
+  clearEventModals();
 }
 
 function reconcileLocalPendingState(snapshot) {
