@@ -5,6 +5,11 @@ const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
 const HOST_HEARTBEAT_MS = 5000;
 const LOBBY_DISCONNECT_GRACE_MS = 18000;
 const PLAYER_RECONNECT_DELAYS_MS = [900, 1600, 2600, 4200, 6000, 8200];
+const SCRIPT_SOURCES = {
+  peer: "./vendor/peerjs.min.js?v=20260814a",
+  qr: "./vendor/qrcode.min.js?v=20260814b"
+};
+const SCRIPT_LOADS = new Map();
 const TEST_BOT_NAMES = [
   "陪測分身阿酒",
   "氣氛組小王",
@@ -172,7 +177,45 @@ const ROUND_EVENT_DECK = [
   }
 ];
 
-document.addEventListener("DOMContentLoaded", initApp);
+document.addEventListener("DOMContentLoaded", initApp, { once: true });
+
+function loadGlobalScript(key, globalName) {
+  if (window[globalName]) {
+    return Promise.resolve(window[globalName]);
+  }
+  if (SCRIPT_LOADS.has(key)) {
+    return SCRIPT_LOADS.get(key);
+  }
+
+  const load = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = SCRIPT_SOURCES[key];
+    script.async = true;
+    script.onload = () => {
+      if (window[globalName]) {
+        resolve(window[globalName]);
+        return;
+      }
+      reject(new Error(`${globalName} 沒有正確啟動`));
+    };
+    script.onerror = () => reject(new Error(`${globalName} 載入失敗`));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    SCRIPT_LOADS.delete(key);
+    throw error;
+  });
+
+  SCRIPT_LOADS.set(key, load);
+  return load;
+}
+
+function ensurePeerLibrary() {
+  return loadGlobalScript("peer", "Peer");
+}
+
+function ensureQrLibrary() {
+  return loadGlobalScript("qr", "QRCode");
+}
 
 function initApp() {
   cacheDom();
@@ -836,7 +879,7 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function handleCreateRoom() {
+async function handleCreateRoom() {
   const existing = currentProfile();
   const typedName = sanitizeName(APP.dom.hostNameInput.value);
   const name = typedName || existing.name || "今晚主揪";
@@ -856,7 +899,14 @@ function handleCreateRoom() {
   }
 
   destroyPeerState();
-  attemptCreateHostPeer(profile, 0);
+  setCreateRoomBusy(true);
+  try {
+    await ensurePeerLibrary();
+    attemptCreateHostPeer(profile, 0);
+  } catch (error) {
+    setCreateRoomBusy(false);
+    showToast("連線工具沒載到，再按一次就好。");
+  }
 }
 
 function attemptCreateHostPeer(profile, attempts) {
@@ -865,6 +915,7 @@ function attemptCreateHostPeer(profile, attempts) {
   const peer = new Peer(hostPeerId);
 
   peer.on("open", (id) => {
+    setCreateRoomBusy(false);
     APP.role = "host";
     APP.peer = peer;
     APP.selfId = id;
@@ -888,6 +939,7 @@ function attemptCreateHostPeer(profile, attempts) {
       attemptCreateHostPeer(profile, attempts + 1);
       return;
     }
+    setCreateRoomBusy(false);
     showToast(`開桌失敗：${error.type || error.message}`);
   });
 }
@@ -960,7 +1012,7 @@ function createPlayerState(id, profile, isHost = false) {
   };
 }
 
-function handleJoinSubmit(event) {
+async function handleJoinSubmit(event) {
   event.preventDefault();
   const roomCode = sanitizeRoomCode(APP.dom.roomCodeInput.value);
   const name = sanitizeName(APP.dom.playerNameInput.value);
@@ -980,7 +1032,13 @@ function handleJoinSubmit(event) {
   rememberPlayerProfile({ name, avatar });
   setJoinFormBusy(true, "潛入中…");
   showToast("正在找主揪對暗號，等我一下。");
-  createPlayerPeer(roomCode, { name, avatar });
+  try {
+    await ensurePeerLibrary();
+    createPlayerPeer(roomCode, { name, avatar });
+  } catch (error) {
+    clearJoinAttemptState();
+    showToast("連線工具沒載到，再滑一次就好。");
+  }
 }
 
 function createPlayerPeer(roomCode, profile) {
@@ -1495,7 +1553,27 @@ function renderLobby(snapshot) {
 }
 
 function renderQrCanvas(target, link, width = 180) {
-  if (!target || !window.QRCode) {
+  if (!target || !link) {
+    return;
+  }
+  if (!window.QRCode) {
+    const loadingKey = `${link}|${width}`;
+    if (target.dataset.loadingQr === loadingKey) {
+      return;
+    }
+    target.dataset.loadingQr = loadingKey;
+    target.setAttribute("aria-busy", "true");
+    ensureQrLibrary()
+      .then(() => {
+        delete target.dataset.loadingQr;
+        target.removeAttribute("aria-busy");
+        renderQrCanvas(target, link, width);
+      })
+      .catch(() => {
+        delete target.dataset.loadingQr;
+        target.removeAttribute("aria-busy");
+        target.textContent = "QR 暫時沒長出來，直接複製連結也行。";
+      });
     return;
   }
   if (target.dataset.value === link && target.dataset.width === String(width)) {
@@ -2962,6 +3040,11 @@ function setJoinFormBusy(isBusy, label = "我要入桌") {
   Array.from(APP.dom.avatarPicker.querySelectorAll(".avatar-chip")).forEach((chip) => {
     chip.disabled = isBusy;
   });
+}
+
+function setCreateRoomBusy(isBusy) {
+  APP.dom.createRoomBtn.disabled = isBusy;
+  APP.dom.createRoomBtn.textContent = isBusy ? "正在開桌…" : "我要開一桌";
 }
 
 function startJoinAttemptTimeout() {
