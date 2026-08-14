@@ -773,6 +773,8 @@ select {
 .action-option {
   display: grid;
   gap: 6px;
+  position: relative;
+  overflow: hidden;
   text-align: left;
   padding: 16px;
   border-radius: 18px;
@@ -795,8 +797,34 @@ select {
   background: rgba(255, 196, 104, 0.09);
 }
 
-.action-option.locked {
+.action-option.locked:not(.partner-denied) {
   opacity: 0.6;
+}
+
+.action-option.partner-denied {
+  opacity: 0.78;
+  filter: grayscale(0.72);
+  cursor: not-allowed;
+}
+
+.action-option .action-lock-label {
+  position: absolute;
+  inset: 7px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 110, 127, 0.58);
+  border-radius: 14px;
+  background: rgba(15, 7, 7, 0.88);
+  color: #ff8d9b;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-shadow: 0 2px 14px rgba(255, 110, 127, 0.38);
+  transform: rotate(-1.5deg);
+  backdrop-filter: blur(2px);
 }
 
 .locked-card {

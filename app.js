@@ -66,62 +66,72 @@ const ROUND_EVENT_DECK = [
   {
     icon: "🦜",
     blockedActions: ["oral_condom", "sex_condom"],
-    badge: "今天不要塑膠感",
-    detail: "對方一秒表態：「今天不要塑膠感。」這局所有戴套選項都直接封印。"
+    lockLabel: "他不給",
+    badge: "他不給你戴",
+    detail: "他把手一擋：「我今天不想戴，你要戴就不要。」這局戴套選項全鎖。"
   },
   {
     icon: "🎈",
     blockedActions: ["oral_condom", "sex_condom"],
-    badge: "不要中場拆包裝",
-    detail: "對方勾勾手指說：「不要中場拆包裝，氣氛會冷掉。」這局所有戴套選項都不能按。"
+    lockLabel: "他不想",
+    badge: "他今天不想戴",
+    detail: "他勾勾手指：「我今天就是不想戴。」這局戴套選項不能按。"
   },
   {
     icon: "🪩",
     blockedActions: ["oral_condom", "sex_condom"],
-    badge: "今天走直球派",
-    detail: "對方笑得超直接：「今天走直球派，不要那層。」這局不能選任何戴套路線。"
+    lockLabel: "他不給",
+    badge: "他把套子收走了",
+    detail: "他笑得很直接：「那個今天用不到。」這局所有戴套選項直接鎖起來。"
   },
   {
     icon: "🍸",
     blockedActions: ["oral_condom", "sex_condom"],
-    badge: "不要跟我談流程",
-    detail: "對方邊笑邊擺手：「不要跟我談流程，我今天走感覺派。」這局所有戴套選項一律不給過。"
+    lockLabel: "他不想",
+    badge: "他不想隔一層",
+    detail: "他邊笑邊擺手：「我不想隔一層。」這局戴套選項一律不給過。"
   },
   {
     icon: "🎤",
     blockedActions: ["oral_condom", "sex_condom"],
-    badge: "那層今天免了",
-    detail: "對方很有主見地說：「那層今天免了。」這局不能選任何戴套互動。"
+    lockLabel: "他不給",
+    badge: "他說戴套免談",
+    detail: "他很有主見地說：「要戴就免談。」這局不能選任何戴套互動。"
   },
   {
     icon: "🧽",
     blockedActions: ["oral_raw", "sex_raw"],
-    badge: "不戴就別演",
-    detail: "對方直接畫線：「不戴就別演。」這局所有無套選項都直接鎖住。"
+    lockLabel: "他不給",
+    badge: "他不給你無套",
+    detail: "他直接畫線：「沒戴就別碰我。」這局無套選項全鎖。"
   },
   {
     icon: "🐙",
     blockedActions: ["oral_raw", "sex_raw"],
-    badge: "今天只玩有保護",
-    detail: "你才剛試探，對方就秒回：「今天只玩有保護。」這局不能選任何無套路線。"
+    lockLabel: "他不想",
+    badge: "他今天不想無套",
+    detail: "你才剛試探，他就秒回：「我不想無套。」這局不能選任何無套路線。"
   },
   {
     icon: "📦",
     blockedActions: ["oral_raw", "sex_raw"],
-    badge: "安全感擺第一",
-    detail: "對方神神祕祕地說：「安全感擺第一，沒得商量。」這局所有無套選項都不能碰。"
+    lockLabel: "他不給",
+    badge: "他只給你戴套",
+    detail: "他把套子拍在桌上：「只有這條路，沒得商量。」這局無套選項都不能碰。"
   },
   {
     icon: "🪄",
     blockedActions: ["oral_raw", "sex_raw"],
-    badge: "今天規矩比氣氛大",
-    detail: "對方眨眼補一句：「今天規矩比氣氛大。」這局不能選任何無套互動。"
+    lockLabel: "他不想",
+    badge: "他不想拿健康賭",
+    detail: "他眨眼補一句：「我不想拿健康跟你賭。」這局不能選任何無套互動。"
   },
   {
     icon: "🎲",
     blockedActions: ["oral_raw", "sex_raw"],
-    badge: "套上才有得聊",
-    detail: "對方理直氣壯地下結論：「套上才有得聊，其他免談。」這局不能選任何無套選項。"
+    lockLabel: "他不給",
+    badge: "他說不戴沒得聊",
+    detail: "他理直氣壯地下結論：「不戴套就沒得聊。」這局不能選任何無套選項。"
   },
   {
     icon: "🕯️",
@@ -354,7 +364,7 @@ function renderActionButtons() {
     button.type = "button";
     button.className = "action-option";
     button.dataset.action = actionKey;
-    button.innerHTML = `<strong>${action.label}</strong><span>${action.description}</span>`;
+    button.innerHTML = `<strong>${action.label}</strong><span>${action.description}</span><span class="action-lock-label hidden"></span>`;
     button.addEventListener("click", () => submitAction(actionKey));
     APP.dom.actionButtons.appendChild(button);
     APP.actionButtonNodes.push(button);
@@ -1311,6 +1321,7 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       partner: partnerId ? buildPartnerView(playerId, partnerId) : null,
       submission: room.round.submissions[playerId] || null,
       availableActions: getAllowedActionsForPlayer(playerId),
+      actionLocks: getActionLocksForPlayer(playerId),
       submissionProgress: shared.round.submissionProgress
     };
   }
@@ -1544,14 +1555,14 @@ function renderRound(snapshot) {
     APP.dom.partnerFlirt.textContent = "「這局讓你喘口氣，暫時沒人跟你對到。」";
     APP.dom.partnerTags.replaceChildren();
     setPartnerToolState(false, isLocked);
-    renderActionButtonStates([], effectiveSubmission, true, Boolean(pendingUtility));
+    renderActionButtonStates([], {}, effectiveSubmission, true, Boolean(pendingUtility));
   } else {
     APP.dom.partnerAvatar.textContent = round.partner.avatar;
     APP.dom.partnerName.textContent = round.partner.name;
     APP.dom.partnerFlirt.textContent = `「${round.partner.flirt}」`;
     renderPartnerTags(round.partner, self.anxiety);
     setPartnerToolState(true, isLocked);
-    renderActionButtonStates(round.availableActions, effectiveSubmission, false, Boolean(pendingUtility || reconnecting));
+    renderActionButtonStates(round.availableActions, round.actionLocks || {}, effectiveSubmission, false, Boolean(pendingUtility || reconnecting));
   }
 
   updateSubmissionCard(effectiveSubmission, round.partner, pendingUtility, !round.partner, reconnecting);
@@ -1613,13 +1624,20 @@ function tagIcon(color) {
   return "⏺";
 }
 
-function renderActionButtonStates(availableActions, submittedAction, noPartner, pendingUtility = false) {
+function renderActionButtonStates(availableActions, actionLocks, submittedAction, noPartner, pendingUtility = false) {
   APP.actionButtonNodes.forEach((button) => {
     const actionKey = button.dataset.action;
     const allowed = noPartner ? false : availableActions.includes(actionKey);
+    const denialLabel = noPartner ? "" : actionLocks[actionKey] || "";
+    const lockLabel = button.querySelector(".action-lock-label");
     button.disabled = Boolean(submittedAction) || pendingUtility || !allowed;
     button.classList.toggle("selected", submittedAction === actionKey);
     button.classList.toggle("locked", Boolean(submittedAction) || pendingUtility || !allowed);
+    button.classList.toggle("partner-denied", Boolean(denialLabel));
+    if (lockLabel) {
+      lockLabel.textContent = denialLabel;
+      lockLabel.classList.toggle("hidden", !denialLabel);
+    }
   });
 }
 
@@ -2144,9 +2162,51 @@ function createPairRoundEvent() {
     roundNotice: picked ? {
       icon: picked.icon,
       badge: picked.badge,
-      detail: picked.detail
+      detail: picked.detail,
+      lockLabel: picked.lockLabel || ""
     } : null
   };
+}
+
+function getActionLocksForPlayer(playerId) {
+  const room = APP.hostRoom;
+  if (!room || !room.round) {
+    return {};
+  }
+  const partnerId = room.round.pairMap[playerId];
+  if (!partnerId) {
+    return {};
+  }
+
+  const constraints = room.players[partnerId].persona.constraints;
+  const privateState = room.round.private[playerId];
+  const locks = {};
+  const lockActions = (actionKeys, label) => {
+    actionKeys.forEach((actionKey) => {
+      if (!locks[actionKey]) {
+        locks[actionKey] = label;
+      }
+    });
+  };
+
+  constraints.forEach((constraint) => {
+    if (constraint === "no_condom") {
+      lockActions(["oral_condom", "sex_condom"], "他不給");
+    } else if (constraint === "condom_only") {
+      lockActions(["oral_raw", "sex_raw"], "他不給");
+    } else if (constraint === "no_oral") {
+      lockActions(["oral_condom", "oral_raw"], "他不想");
+    } else if (constraint === "oral_only") {
+      lockActions(["sex_condom", "sex_raw"], "他不想");
+    }
+  });
+
+  lockActions(
+    privateState?.blockedActions || [],
+    privateState?.roundNotice?.lockLabel || "他不給"
+  );
+
+  return locks;
 }
 
 function getAllowedActionsForPlayer(playerId) {
@@ -2159,30 +2219,8 @@ function getAllowedActionsForPlayer(playerId) {
     return ["refuse"];
   }
 
-  const constraints = room.players[partnerId].persona.constraints;
-  const privateState = room.round.private[playerId];
-  const blocked = new Set();
-  constraints.forEach((constraint) => {
-    if (constraint === "no_condom") {
-      blocked.add("oral_condom");
-      blocked.add("sex_condom");
-    } else if (constraint === "condom_only") {
-      blocked.add("oral_raw");
-      blocked.add("sex_raw");
-    } else if (constraint === "no_oral") {
-      blocked.add("oral_condom");
-      blocked.add("oral_raw");
-    } else if (constraint === "oral_only") {
-      blocked.add("sex_condom");
-      blocked.add("sex_raw");
-    }
-  });
-
-  (privateState?.blockedActions || []).forEach((actionKey) => {
-    blocked.add(actionKey);
-  });
-
-  return GAME_CONFIG.actionOrder.filter((actionKey) => !blocked.has(actionKey));
+  const locks = getActionLocksForPlayer(playerId);
+  return GAME_CONFIG.actionOrder.filter((actionKey) => !locks[actionKey]);
 }
 
 function handleChatReveal() {
