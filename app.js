@@ -2271,10 +2271,16 @@ function startHostRound() {
     pairMap[right] = left;
   });
 
-  const roundRestrictions = createRoundRestrictions(activeIds, pairs);
+  const randomEventsEnabled = room.roundIndex > 1;
+  const roundRestrictions = createRoundRestrictions(activeIds, pairs, randomEventsEnabled);
   const privateMap = {};
   activeIds.forEach((playerId) => {
-    privateMap[playerId] = createPrivateRoundState(playerId, pairMap[playerId], roundRestrictions[playerId]);
+    privateMap[playerId] = createPrivateRoundState(
+      playerId,
+      pairMap[playerId],
+      roundRestrictions[playerId],
+      randomEventsEnabled
+    );
   });
 
   room.round = {
@@ -2309,6 +2315,9 @@ function privateStateForPlayer(room, playerId) {
 }
 
 function buildRoundEventModals(privateState, roundIndex, playerId) {
+  if (roundIndex <= 1) {
+    return [];
+  }
   const events = [];
   const roundNotice = privateState?.roundNotice;
   if (roundNotice && privateState.actionTransform !== "remove_condom") {
@@ -2413,7 +2422,12 @@ function chooseSoloTestAction(playerId) {
   return allowed[0] || "refuse";
 }
 
-function createPrivateRoundState(playerId, partnerId, restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0, actionTransform: null }) {
+function createPrivateRoundState(
+  playerId,
+  partnerId,
+  restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0, actionTransform: null },
+  randomEventsEnabled = true
+) {
   if (!partnerId) {
     return {
       hiddenIndices: [],
@@ -2451,7 +2465,7 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     Math.floor(player.healthAnxiety / GAME_CONFIG.healthAnxietyClueStep)
   );
   shuffle(visibleIndices).slice(0, extraHiddenCount).forEach((index) => hiddenIndices.add(index));
-  const dissatisfactionEvent = createDissatisfactionEvent(player);
+  const dissatisfactionEvent = randomEventsEnabled ? createDissatisfactionEvent(player) : null;
 
   return {
     hiddenIndices: [...hiddenIndices],
@@ -2498,7 +2512,7 @@ function createDissatisfactionEvent(player) {
   };
 }
 
-function createRoundRestrictions(activeIds, pairs) {
+function createRoundRestrictions(activeIds, pairs, randomEventsEnabled = true) {
   const restrictions = Object.fromEntries(activeIds.map((playerId) => [playerId, {
     blockedActions: [],
     roundNotice: null,
@@ -2506,6 +2520,10 @@ function createRoundRestrictions(activeIds, pairs) {
     riskBonus: 0,
     actionTransform: null
   }]));
+
+  if (!randomEventsEnabled) {
+    return restrictions;
+  }
 
   pairs.forEach(([leftId, rightId]) => {
     const event = createPairRoundEvent();
