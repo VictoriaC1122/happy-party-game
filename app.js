@@ -1797,9 +1797,10 @@ function renderAwards(snapshot) {
 
   snapshot.finale.podium.forEach((entry, index) => {
     const card = document.createElement("article");
-    card.className = `podium-card rank-${index + 1}`;
+    const rank = entry.rank || index + 1;
+    card.className = `podium-card rank-${rank}`;
     card.innerHTML = `
-      <div class="podium-rank">${index + 1}</div>
+      <div class="podium-rank">${rank}</div>
       <div class="podium-avatar">${entry.avatar}</div>
       <strong>${escapeHtml(entry.title)}</strong>
       <div>${escapeHtml(entry.playerName)}</div>
@@ -2801,79 +2802,173 @@ function handleHostAdvance() {
 function finalizeHostedGame() {
   const room = APP.hostRoom;
   const players = Object.values(room.players);
-  const healthyWinners = players.filter((player) => !player.isInfected && player.intimacyCount > 0);
   const everyoneInfected = players.every((player) => player.isInfected);
+  const selection = selectFinalWinners(players, everyoneInfected);
+  const winnerById = new Map(selection.entries.map((entry) => [entry.player.id, entry]));
   const finalResults = {};
 
   players.forEach((player) => {
+    const winner = winnerById.get(player.id) || null;
+    const scoreCard = everyoneInfected
+      ? calculateCarrierStageScore(player)
+      : calculateSurvivalScore(player);
     let kind = "lose";
     let label = "今晚翻車";
-    let detail = `演了 ${player.intimacyCount} 次，最後狀態是${player.isInfected ? "感染" : "健康"}。`;
+    let detail = `親密 ${player.intimacyCount} 次，終局是${player.isInfected ? "感染" : "健康"}，生存分 ${scoreCard.score}。`;
 
-    if (player.intimacyCount === 0) {
+    if (winner && everyoneInfected) {
+      kind = "carrier";
+      label = `帶原勝利 · 第 ${winner.rank} 席`;
+      detail = `全場淪陷任務成功；你帶出 ${player.transmissionCount} 次傳播，站上第 ${winner.rank} 席。`;
+    } else if (winner) {
+      kind = "winner";
+      label = `${player.isInfected ? "逆風勝利" : "健康勝利"} · 第 ${winner.rank} 席`;
+      detail = `${player.isInfected ? "雖然終局感染，仍靠整體判斷遞補上榜" : "保持健康並拿下前段生存分"}；生存分 ${winner.scoreCard.score}。`;
+    } else if (player.intimacyCount === 0) {
       kind = "lose";
       label = "全程觀望王";
       detail = "你一路看到最後都沒真正下場，遊戲直接判你白來。";
-    } else if (healthyWinners.some((winner) => winner.id === player.id)) {
-      kind = "winner";
-      label = "健康倖存王";
-      detail = `演了 ${player.intimacyCount} 次還能全身而退，真的有兩把刷子。`;
-    } else if (everyoneInfected && player.isCarrier) {
-      kind = "carrier";
-      label = "帶原者笑到最後";
-      detail = "你是開局那批帶原者之一，最後真的把全場帶歪了。";
+    } else if (everyoneInfected) {
+      kind = "lose";
+      label = "全場淪陷";
+      detail = "全場雖然中標，但這局是 6 位初始帶原者的陣營勝利。";
     } else if (player.isCarrier) {
       kind = "lose";
-      label = "帶原者差一口氣";
-      detail = "最後還有人全身而退，這桌沒有被你們徹底帶壞。";
+      label = "帶原任務失敗";
+      detail = `終局還有人健康，帶原陣營先扣順位；你的生存分是 ${scoreCard.score}。`;
+    } else if (!player.isInfected) {
+      kind = "lose";
+      label = "健康但差一席";
+      detail = `你有健康收工，但生存分 ${scoreCard.score} 沒擠進今晚前 6。`;
     } else {
       kind = "lose";
-      label = player.isInfected ? "終局中標" : "差一點就成神";
+      label = "生存分沒進榜";
+      detail = `你有下場，但終局感染且生存分 ${scoreCard.score} 沒搶到 6 個席次。`;
     }
 
     finalResults[player.id] = {
       kind,
       label,
-      detail
+      detail,
+      rank: winner?.rank || null,
+      score: scoreCard.score
     };
   });
 
   room.finalResults = finalResults;
-  room.finale = buildFinale(players, healthyWinners, everyoneInfected, finalResults);
+  room.finale = buildFinale(players, selection, everyoneInfected, finalResults);
   room.phase = "awards";
   hostSyncAll({ immediate: true });
 }
 
-function buildFinale(players, healthyWinners, everyoneInfected, finalResults) {
-  let heading = "";
-  let body = "";
-
-  if (healthyWinners.length > 0) {
-    heading = "健康倖存者笑到最後";
-    body = `今晚有 ${healthyWinners.length} 位玩家不是來觀光的，真的下場後還能全身而退。`;
-  } else if (everyoneInfected) {
-    heading = "全場淪陷，帶原者開香檳";
-    body = "收官時全場通通中標，開局那 6 位帶原者把這桌徹底帶歪。";
-  } else {
-    heading = "沒人完美收工";
-    body = "雖然沒有倖存王，但也沒全場淪陷，大家今晚算是各有各的翻車。";
+function selectFinalWinners(players, everyoneInfected) {
+  if (everyoneInfected) {
+    const entries = players
+      .filter((player) => player.isCarrier)
+      .map((player) => ({
+        player,
+        scoreCard: calculateCarrierStageScore(player)
+      }))
+      .sort(compareCarrierFinalists)
+      .slice(0, GAME_CONFIG.finalWinnerCount)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
+    return { mode: "carrier", entries };
   }
 
-  const podium = buildPodium(players, healthyWinners, everyoneInfected, finalResults);
+  const entries = players
+    .filter((player) => player.intimacyCount > 0)
+    .map((player) => ({
+      player,
+      scoreCard: calculateSurvivalScore(player)
+    }))
+    .sort(compareSurvivalFinalists)
+    .slice(0, GAME_CONFIG.finalWinnerCount)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+  return { mode: "survival", entries };
+}
+
+function calculateSurvivalScore(player) {
+  const protectedIntimacies = Math.max(0, player.stats.successfulIntimacies - player.stats.riskyActions);
+  const scoreParts = {
+    healthy: player.isInfected ? 0 : 120,
+    participation: Math.min(player.intimacyCount, GAME_CONFIG.roundCount) * 4,
+    protected: protectedIntimacies * 7,
+    closeCalls: player.stats.closeCalls * 10,
+    correctLeaves: player.stats.correctLeaves * 7,
+    testkit: player.stats.tests * 5,
+    hospital: Math.min(player.stats.hospitals, 2) * 3,
+    risky: player.stats.riskyActions * -9,
+    transmissions: player.transmissionCount * -10,
+    failedCarrierMission: player.isCarrier ? -30 : 0
+  };
+  return {
+    score: Object.values(scoreParts).reduce((total, value) => total + value, 0),
+    protectedIntimacies,
+    scoreParts
+  };
+}
+
+function calculateCarrierStageScore(player) {
+  return {
+    score: player.transmissionCount * 25 + player.intimacyCount * 5 + player.stats.riskyActions * 2
+  };
+}
+
+function compareSurvivalFinalists(left, right) {
+  if (left.player.isInfected !== right.player.isInfected) {
+    return left.player.isInfected ? 1 : -1;
+  }
+  if (left.player.isCarrier !== right.player.isCarrier) {
+    return left.player.isCarrier ? 1 : -1;
+  }
+  return right.scoreCard.score - left.scoreCard.score
+    || right.player.stats.closeCalls - left.player.stats.closeCalls
+    || right.player.intimacyCount - left.player.intimacyCount
+    || stableFinalTieValue(left.player.id) - stableFinalTieValue(right.player.id);
+}
+
+function compareCarrierFinalists(left, right) {
+  return right.scoreCard.score - left.scoreCard.score
+    || right.player.transmissionCount - left.player.transmissionCount
+    || right.player.intimacyCount - left.player.intimacyCount
+    || stableFinalTieValue(left.player.id) - stableFinalTieValue(right.player.id);
+}
+
+function stableFinalTieValue(playerId) {
+  let hash = 2166136261;
+  String(playerId).split("").forEach((character) => {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  });
+  return hash >>> 0;
+}
+
+function buildFinale(players, selection, everyoneInfected, finalResults) {
+  const winnerCount = selection.entries.length;
+  const heading = everyoneInfected
+    ? "全場淪陷，六位帶原者包下舞台"
+    : `${winnerCount} 位終局勝利者上台`;
+  const body = everyoneInfected
+    ? "收官時全場通通中標，6 位初始帶原者共同獲勝；舞台順序只看誰最會帶節奏。"
+    : `健康者優先，再按生存分補滿 6 席。今晚共有 ${winnerCount} 位符合親密資格的玩家站上舞台。`;
+
+  const podium = buildWinnerPodium(selection);
   const awards = players
+    .slice()
     .sort((left, right) => {
-      const leftScore = rankWeight(finalResults[left.id].kind);
-      const rightScore = rankWeight(finalResults[right.id].kind);
-      if (leftScore !== rightScore) {
-        return rightScore - leftScore;
+      const leftRank = finalResults[left.id].rank || Number.POSITIVE_INFINITY;
+      const rightRank = finalResults[right.id].rank || Number.POSITIVE_INFINITY;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
       }
-      return right.intimacyCount - left.intimacyCount;
+      return finalResults[right.id].score - finalResults[left.id].score
+        || right.intimacyCount - left.intimacyCount;
     })
     .map((player) => ({
       avatar: player.avatar,
       name: player.name,
       label: finalResults[player.id].label,
-      detail: `${finalResults[player.id].detail} 還順手傳了 ${player.transmissionCount} 次。`,
+      detail: finalResults[player.id].detail,
       kind: finalResults[player.id].kind
     }));
 
@@ -2885,59 +2980,35 @@ function buildFinale(players, healthyWinners, everyoneInfected, finalResults) {
   };
 }
 
-function buildPodium(players, healthyWinners, everyoneInfected, finalResults) {
-  const safest = healthyWinners
-    .slice()
-    .sort((left, right) => left.anxiety - right.anxiety || right.intimacyCount - left.intimacyCount)[0];
-  const spreader = players
-    .slice()
-    .sort((left, right) => right.transmissionCount - left.transmissionCount || right.stats.riskyActions - left.stats.riskyActions)[0];
-  const social = players
-    .slice()
-    .sort((left, right) => right.intimacyCount - left.intimacyCount || left.anxiety - right.anxiety)[0];
+function buildWinnerPodium(selection) {
+  const survivalTitles = [
+    "生存總冠軍",
+    "風險拆彈亞軍",
+    "清醒派對季軍",
+    "第四席勝利者",
+    "第五席勝利者",
+    "第六席勝利者"
+  ];
+  const carrierTitles = [
+    "帶原 MVP",
+    "帶節奏亞軍",
+    "擴散季軍",
+    "帶原第四席",
+    "帶原第五席",
+    "帶原第六席"
+  ];
 
-  const entries = [];
-
-  if (everyoneInfected) {
-    const bestCarrier = players
-      .filter((player) => player.isCarrier)
-      .sort((left, right) => right.transmissionCount - left.transmissionCount)[0];
-    entries.push({
-      avatar: bestCarrier?.avatar || "🦠",
-      playerName: bestCarrier?.name || "帶原者本人",
-      title: "今晚最會帶節奏",
-      subtitle: bestCarrier ? `一口氣帶飛 ${bestCarrier.transmissionCount} 次` : "帶原者今晚真的贏麻了"
-    });
-  } else {
-    entries.push({
-      avatar: safest?.avatar || "✨",
-      playerName: safest?.name || "倖存本人",
-      title: "全身而退王",
-      subtitle: safest ? `演了 ${safest.intimacyCount} 次還是沒翻車` : "今晚沒人能乾淨收工"
-    });
-  }
-
-  entries.push({
-    avatar: spreader?.avatar || "🔥",
-    playerName: spreader?.name || "高風險本尊",
-    title: "帶風向散播王",
-    subtitle: spreader ? `一路帶出 ${spreader.transmissionCount} 次傳播` : "今晚大家居然都還算克制"
-  });
-
-  entries.push({
-    avatar: social?.avatar || "🎉",
-    playerName: social?.name || "派對本人",
-    title: "今晚最忙的人",
-    subtitle: social ? `全場跑了 ${social.intimacyCount} 次互動` : "下次再來刷存在感"
-  });
-
-  return entries;
-}
-
-function rankWeight(kind) {
-  if (kind === "winner") return 3;
-  if (kind === "carrier") return 2;
-  return 1;
+  return selection.entries.map((entry) => ({
+    rank: entry.rank,
+    avatar: entry.player.avatar,
+    playerName: entry.player.name,
+    title: selection.mode === "carrier"
+      ? carrierTitles[entry.rank - 1]
+      : survivalTitles[entry.rank - 1],
+    subtitle: selection.mode === "carrier"
+      ? `傳播 ${entry.player.transmissionCount} 次 · 親密 ${entry.player.intimacyCount} 次`
+      : `${entry.player.isInfected ? "逆風遞補" : "健康晉級"} · 生存分 ${entry.scoreCard.score}`
+  }));
 }
 
 function generatePersona(isCarrier) {

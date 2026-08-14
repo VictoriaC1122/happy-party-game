@@ -4,6 +4,7 @@ const GAME_CONFIG = {
   maxPlayers: 40,
   roundCount: 10,
   initialCarrierCount: 6,
+  finalWinnerCount: 6,
   roundDurationMs: 30 * 1000,
   startDesire: 45,
   startAnxiety: 0,

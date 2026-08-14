@@ -1083,13 +1083,16 @@ select {
 
 .podium-stage {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: end;
   gap: 14px;
   contain: layout paint;
 }
 
 .podium-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 190px;
   padding: 18px;
   border-radius: 22px;
   border: 1px solid rgba(116, 82, 92, 0.12);
@@ -1100,18 +1103,39 @@ select {
 }
 
 .podium-card.rank-1 {
-  min-height: 280px;
+  grid-column: 3 / span 2;
+  grid-row: 1;
+  min-height: 270px;
   background:
     linear-gradient(180deg, rgba(202, 169, 177, 0.46), rgba(255,255,255,0.56)),
     linear-gradient(180deg, rgba(255,255,255,0.76), rgba(231,216,219,0.62));
 }
 
 .podium-card.rank-2 {
-  min-height: 230px;
+  grid-column: 1 / span 2;
+  grid-row: 1;
+  min-height: 235px;
 }
 
 .podium-card.rank-3 {
-  min-height: 210px;
+  grid-column: 5 / span 2;
+  grid-row: 1;
+  min-height: 220px;
+}
+
+.podium-card.rank-4 {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+}
+
+.podium-card.rank-5 {
+  grid-column: 3 / span 2;
+  grid-row: 2;
+}
+
+.podium-card.rank-6 {
+  grid-column: 5 / span 2;
+  grid-row: 2;
 }
 
 .podium-rank {
@@ -1275,6 +1299,21 @@ select {
     align-items: flex-start;
     justify-content: flex-start;
   }
+
+  .podium-stage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .podium-card.rank-1,
+  .podium-card.rank-2,
+  .podium-card.rank-3,
+  .podium-card.rank-4,
+  .podium-card.rank-5,
+  .podium-card.rank-6 {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 0;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1288,6 +1327,10 @@ select {
 
   .noise {
     opacity: 0.18;
+  }
+
+  .podium-stage {
+    grid-template-columns: 1fr;
   }
 
   .app-shell {
