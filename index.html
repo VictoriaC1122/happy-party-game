@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260815b">
-  <script defer src="./data.js?v=20260815a"></script>
-  <script defer src="./app.js?v=20260815d"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260815c">
+  <script defer src="./data.js?v=20260815b"></script>
+  <script defer src="./app.js?v=20260815e"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -123,7 +123,7 @@
             <p class="education-kicker">今晚玩法</p>
             <h3>這桌到底怎麼贏</h3>
             <ul class="plain-list compact education-list">
-              <li>開局暗抽 6 位帶原者，誰都不會知道自己的答案。</li>
+              <li>開局暗抽 6 位帶原者，只有帶原者本人會收到自己的答案。</li>
               <li>10 Round 隨機換人，每局 45 秒。</li>
               <li>整晚完全沒親密互動，直接頒你「來觀光」。</li>
               <li>終局只留 6 席；有下場的人全感染，6 位帶原者一起贏。</li>
@@ -174,12 +174,14 @@
           <ul class="plain-list compact">
             <li>最多 40 人，整晚跑滿 10 Round。</li>
             <li>開局暗抽 6 位帶原者，感染狀態不公開。</li>
+            <li>6 位帶原者第 1 局就會收到自己的陣營身分，其他人看不到。</li>
             <li>每 Round 隨機兩兩配對，每人只有 1 次偷驗機會。</li>
             <li>每局只有 45 秒，時間到還沒選，系統就直接幫你「換一個」。</li>
             <li>感染後還能繼續傳下去，不會提早出局。</li>
             <li>第 1 局不鬧事；第 2 局起才會抽無厘頭亂入，讓風險突然往上飆。</li>
             <li>抽到「對方偷偷戳破套子」，戴套口交與戴套性交會在翻牌時改判成對應的無套行為。</li>
             <li>第 2 局起，欲求不滿值 25% 才會抽失控事件；越高越可能抽到「沒得選，我就是要做」或「你不想」。</li>
+            <li>帶原者成功無套性交 2 次後，對方的戴套選項會多 25% 上鎖機率；之後每次 +15%，最高 70%。</li>
             <li>焦慮得病值每 25% 多遮一條線索；80% 起連聊天套話都做不到。</li>
             <li>玩到最後如果一次親密互動都沒有，遊戲直接判你空手出局。</li>
             <li>如果最後還有人健康，有親密經驗的人會按生存分搶 6 個勝利席次。</li>
@@ -252,12 +254,14 @@
           <ul class="plain-list compact">
             <li>12 到 40 人最熱鬧，8 人是最低開桌門檻。</li>
             <li>主揪一按開始，遊戲就會暗抽 6 位帶原者，身分全程藏好。</li>
+            <li>帶原者第 1 局就知道自己的身分，任務是別聲張，盡量在遊戲裡促成無套性交。</li>
             <li>全場跑 10 Round，每 Round 都會重新隨機兩兩配對。</li>
             <li>每局 45 秒，倒數歸零還沒出牌，就默認「換一個」。</li>
             <li>第 1 局平安下莊；第 2 局起才可能被莫名其妙的亂入事件搞到風險暴衝。</li>
             <li>「對方偷偷戳破套子」會把戴套口交、戴套性交改判成對應的無套行為。</li>
             <li>每人整晚只有 1 次偷驗對方的機會，醫院則想去幾次都行。</li>
             <li>第 2 局起，欲求不滿值 25% 才進入失控抽選，最高有 70% 機率觸發。</li>
+            <li>帶原者無套性交成功 2 次後，遇到他的人會從 25% 起抽戴套選項上鎖，最高 70%。</li>
             <li>抽到「沒得選，我就是要做」，會強制套用無套性交。</li>
             <li>另一種失控是「你不想」：戴套口交與戴套性交會被全部鎖住。</li>
             <li>焦慮得病值每 25% 多遮一條線索；80% 起無法再靠聊天取得資訊。</li>
@@ -288,6 +292,14 @@
           <span id="timer-pill" class="phase-pill warm">主揪還沒發車</span>
           <span id="self-role-pill" class="phase-pill subtle">你還沒翻身分</span>
         </div>
+      </div>
+
+      <div id="carrier-mission-banner" class="carrier-mission-banner hidden">
+        <div>
+          <span>🦠 你的隱藏陣營</span>
+          <strong>你是初始帶原者，遊戲裡盡量促成無套性交</strong>
+        </div>
+        <span id="carrier-mission-progress" class="carrier-mission-progress">已成功 0 次 · 再 2 次開始加壓</span>
       </div>
 
       <div class="stats-grid">

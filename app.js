@@ -287,6 +287,8 @@ function cacheDom() {
     roundTitle: document.getElementById("round-title"),
     timerPill: document.getElementById("timer-pill"),
     selfRolePill: document.getElementById("self-role-pill"),
+    carrierMissionBanner: document.getElementById("carrier-mission-banner"),
+    carrierMissionProgress: document.getElementById("carrier-mission-progress"),
     dissatisfactionValue: document.getElementById("dissatisfaction-value"),
     healthAnxietyValue: document.getElementById("health-anxiety-value"),
     intimacyValue: document.getElementById("intimacy-value"),
@@ -1175,6 +1177,7 @@ function createPlayerState(id, profile, isHost = false) {
       tests: 0,
       hospitals: 0,
       successfulIntimacies: 0,
+      successfulRawSex: 0,
       riskyActions: 0,
       correctLeaves: 0,
       closeCalls: 0,
@@ -1539,7 +1542,10 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       intimacyCount: me.intimacyCount,
       testkits: me.testkits,
       detectedSelf: me.detectedSelf,
-      detectedInfected: me.detectedSelf ? me.detectedInfected : null
+      detectedInfected: me.detectedSelf ? me.detectedInfected : null,
+      isInitialCarrier: Boolean(me.isCarrier),
+      carrierRawSexSuccesses: me.isCarrier ? (me.stats.successfulRawSex || 0) : 0,
+      carrierCondomLockChance: me.isCarrier ? getCarrierCondomLockChance(me) : 0
     }
   };
 
@@ -1553,7 +1559,10 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       submission: room.round.submissions[playerId] || null,
       availableActions: getAllowedActionsForPlayer(playerId),
       actionLocks: getActionLocksForPlayer(playerId),
-      eventModals: buildRoundEventModals(privateStateForPlayer(room, playerId), room.roundIndex, playerId),
+      eventModals: [
+        ...buildCarrierMissionModals(me, room.roundIndex, playerId),
+        ...buildRoundEventModals(privateStateForPlayer(room, playerId), room.roundIndex, playerId)
+      ],
       submissionProgress: shared.round.submissionProgress
     };
   }
@@ -1616,6 +1625,7 @@ function buildPartnerView(playerId, partnerId) {
     testedResult: privateState.testedResult,
     roundNotice: privateState.roundNotice,
     dissatisfactionEvent: privateState.dissatisfactionEvent || null,
+    carrierPressureEvent: privateState.carrierPressureEvent || null,
     constraints: partner.persona.constraints,
     tags
   };
@@ -1637,6 +1647,7 @@ function buildReplayRoundsForPlayer(room, playerId) {
         actionKey: personal.actionKey,
         roundNotice: personal.roundNotice,
         dissatisfactionEvent: personal.dissatisfactionEvent,
+        carrierPressureEvent: personal.carrierPressureEvent,
         summary: personal.summary,
         postState: personal.postState
       };
@@ -1807,7 +1818,17 @@ function renderRound(snapshot) {
   const carrierPreview = isHostTestMode()
     && APP.testCarrierPreviewActive
     && APP.hostRoom?.players[getHostViewPlayerId()]?.isCarrier;
-  APP.dom.selfRolePill.textContent = carrierPreview ? "測試透視：初始帶原者" : describeRolePill(self);
+  APP.dom.selfRolePill.textContent = carrierPreview
+    ? "測試透視：初始帶原者"
+    : self.isInitialCarrier ? "初始帶原者 · 別說破" : describeRolePill(self);
+  APP.dom.carrierMissionBanner.classList.toggle("hidden", !self.isInitialCarrier);
+  if (self.isInitialCarrier) {
+    const successes = self.carrierRawSexSuccesses || 0;
+    const chancePercent = Math.round((self.carrierCondomLockChance || 0) * 100);
+    APP.dom.carrierMissionProgress.textContent = successes < GAME_CONFIG.carrierCondomLockMinimumRawSex
+      ? `已成功 ${successes} 次 · 再 ${GAME_CONFIG.carrierCondomLockMinimumRawSex - successes} 次開始加壓`
+      : `已成功 ${successes} 次 · 對方戴套選項額外上鎖 ${chancePercent}%`;
+  }
   APP.dom.dissatisfactionValue.textContent = `${self.dissatisfaction}%`;
   APP.dom.healthAnxietyValue.textContent = `${self.healthAnxiety}%`;
   APP.dom.intimacyValue.textContent = String(self.intimacyCount);
@@ -1876,6 +1897,12 @@ function renderPartnerTags(partner, healthAnxiety) {
     const eventBadge = document.createElement("div");
     eventBadge.className = "tag tag-risk-strong";
     eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.dissatisfactionEvent.icon)}</span><span>${escapeHtml(partner.dissatisfactionEvent.badge)}</span>`;
+    fragment.appendChild(eventBadge);
+  }
+  if (partner.carrierPressureEvent) {
+    const eventBadge = document.createElement("div");
+    eventBadge.className = "tag tag-risk-strong";
+    eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.carrierPressureEvent.icon)}</span><span>${escapeHtml(partner.carrierPressureEvent.badge)}</span>`;
     fragment.appendChild(eventBadge);
   }
   APP.dom.partnerTags.replaceChildren(fragment);
@@ -2052,6 +2079,7 @@ function renderAwards(snapshot) {
         <span class="phase-pill subtle">你這局選了：${escapeHtml(entry.actionLabel)}</span>
         ${entry.roundNotice ? `<span class="phase-pill warm">${escapeHtml(`亂入：${entry.roundNotice.badge}`)}</span>` : ""}
         ${entry.dissatisfactionEvent ? `<span class="phase-pill warm">${escapeHtml(`失控：${entry.dissatisfactionEvent.badge}`)}</span>` : ""}
+        ${entry.carrierPressureEvent ? `<span class="phase-pill warm">${escapeHtml(`氣勢：${entry.carrierPressureEvent.badge}`)}</span>` : ""}
       </div>
       <p class="replay-body">${escapeHtml(entry.summary.body)}</p>
       <div class="summary-extra">${chips}${notes}</div>
@@ -2174,6 +2202,7 @@ function startHostedGame() {
       tests: 0,
       hospitals: 0,
       successfulIntimacies: 0,
+      successfulRawSex: 0,
       riskyActions: 0,
       correctLeaves: 0,
       closeCalls: 0,
@@ -2340,7 +2369,30 @@ function buildRoundEventModals(privateState, roundIndex, playerId) {
       body: dissatisfactionEvent.detail
     });
   }
+  const carrierPressureEvent = privateState?.carrierPressureEvent;
+  if (carrierPressureEvent) {
+    events.push({
+      id: `round-${roundIndex}-${playerId}-carrier-pressure`,
+      icon: carrierPressureEvent.icon,
+      kicker: "對方氣勢壓過來",
+      title: carrierPressureEvent.badge,
+      body: carrierPressureEvent.detail
+    });
+  }
   return events;
+}
+
+function buildCarrierMissionModals(player, roundIndex, playerId) {
+  if (roundIndex !== 1 || !player?.isCarrier) {
+    return [];
+  }
+  return [{
+    id: `round-1-${playerId}-carrier-mission`,
+    icon: "🦠",
+    kicker: "你的隱藏身分",
+    title: "你是初始帶原者",
+    body: "你是今晚 6 位初始帶原者之一。遊戲裡盡量促成無套性交；成功 2 次後，之後配到你的人會有 25% 起的機率被鎖住兩個戴套選項，最高 70%。別讓大家太早看穿。"
+  }];
 }
 
 function queueSoloTestBotsForRound() {
@@ -2425,7 +2477,7 @@ function chooseSoloTestAction(playerId) {
 function createPrivateRoundState(
   playerId,
   partnerId,
-  restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0, actionTransform: null },
+  restriction = { blockedActions: [], roundNotice: null, riskMultiplier: 1, riskBonus: 0, actionTransform: null, carrierPressureEvent: null },
   randomEventsEnabled = true
 ) {
   if (!partnerId) {
@@ -2440,7 +2492,8 @@ function createPrivateRoundState(
       roundNotice: restriction.roundNotice,
       riskMultiplier: restriction.riskMultiplier,
       riskBonus: restriction.riskBonus,
-      actionTransform: restriction.actionTransform || null
+      actionTransform: restriction.actionTransform || null,
+      carrierPressureEvent: restriction.carrierPressureEvent || null
     };
   }
 
@@ -2480,7 +2533,8 @@ function createPrivateRoundState(
     roundNotice: restriction.roundNotice,
     riskMultiplier: restriction.riskMultiplier,
     riskBonus: restriction.riskBonus,
-    actionTransform: restriction.actionTransform || null
+    actionTransform: restriction.actionTransform || null,
+    carrierPressureEvent: restriction.carrierPressureEvent || null
   };
 }
 
@@ -2518,7 +2572,8 @@ function createRoundRestrictions(activeIds, pairs, randomEventsEnabled = true) {
     roundNotice: null,
     riskMultiplier: 1,
     riskBonus: 0,
-    actionTransform: null
+    actionTransform: null,
+    carrierPressureEvent: null
   }]));
 
   if (!randomEventsEnabled) {
@@ -2532,18 +2587,48 @@ function createRoundRestrictions(activeIds, pairs, randomEventsEnabled = true) {
       roundNotice: event.roundNotice,
       riskMultiplier: event.riskMultiplier,
       riskBonus: event.riskBonus,
-      actionTransform: event.actionTransform
+      actionTransform: event.actionTransform,
+      carrierPressureEvent: createCarrierPressureEvent(APP.hostRoom?.players[rightId])
     };
     restrictions[rightId] = {
       blockedActions: event.blockedActions.slice(),
       roundNotice: event.roundNotice,
       riskMultiplier: event.riskMultiplier,
       riskBonus: event.riskBonus,
-      actionTransform: event.actionTransform
+      actionTransform: event.actionTransform,
+      carrierPressureEvent: createCarrierPressureEvent(APP.hostRoom?.players[leftId])
     };
   });
 
   return restrictions;
+}
+
+function getCarrierCondomLockChance(player) {
+  if (!player?.isCarrier) {
+    return 0;
+  }
+  const successes = player.stats?.successfulRawSex || 0;
+  if (successes < GAME_CONFIG.carrierCondomLockMinimumRawSex) {
+    return 0;
+  }
+  const extraSuccesses = successes - GAME_CONFIG.carrierCondomLockMinimumRawSex;
+  return Math.min(
+    GAME_CONFIG.carrierCondomLockMaxChance,
+    GAME_CONFIG.carrierCondomLockBaseChance + extraSuccesses * GAME_CONFIG.carrierCondomLockChanceStep
+  );
+}
+
+function createCarrierPressureEvent(partner) {
+  const chance = getCarrierCondomLockChance(partner);
+  if (chance <= 0 || Math.random() >= chance) {
+    return null;
+  }
+  return {
+    icon: "🦠",
+    badge: "他今晚越玩越敢",
+    detail: "他把套子推回來：「我現在就是不想戴。」這局戴套口交和戴套性交全鎖。",
+    lockLabel: "他不給"
+  };
 }
 
 function createPairRoundEvent() {
@@ -2616,6 +2701,12 @@ function getActionLocksForPlayer(playerId) {
     privateState?.blockedActions || [],
     privateState?.roundNotice?.lockLabel || "他不給"
   );
+  if (privateState?.carrierPressureEvent) {
+    lockActions(
+      ["oral_condom", "sex_condom"],
+      privateState.carrierPressureEvent.lockLabel || "他不給"
+    );
+  }
   (privateState?.selfBlockedActions || []).forEach((actionKey) => {
     locks[actionKey] = "你不想";
   });
@@ -2927,6 +3018,12 @@ function createReplayArchiveEntry(room, privateSummaries, publicStats) {
             type: privateState.dissatisfactionEvent.type
           }
         : null,
+      carrierPressureEvent: privateState.carrierPressureEvent
+        ? {
+            icon: privateState.carrierPressureEvent.icon,
+            badge: privateState.carrierPressureEvent.badge
+          }
+        : null,
       summary: {
         title: privateSummaries[playerId]?.title || `第 ${room.roundIndex} 局翻牌`,
         body: privateSummaries[playerId]?.body || "這局就這樣滑過去了。",
@@ -3071,6 +3168,11 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
 
+    if (resolvedActionKey === "sex_raw") {
+      appendCarrierRawSexProgress(leftSummary, left);
+      appendCarrierRawSexProgress(rightSummary, right);
+    }
+
     if (forcedRawSex) {
       leftSummary.chips.push({ label: "沒得選，我就是要做", kind: "warn" });
       rightSummary.chips.push({ label: "沒得選，我就是要做", kind: "warn" });
@@ -3168,6 +3270,9 @@ function applyIntimacy(player, actionKey, partnerWasInfected) {
   player.healthAnxiety = finalizeHealthAnxiety(player.healthAnxiety + action.healthAnxietyGain);
   player.intimacyCount += 1;
   player.stats.successfulIntimacies += 1;
+  if (actionKey === "sex_raw") {
+    player.stats.successfulRawSex = (player.stats.successfulRawSex || 0) + 1;
+  }
   if (!action.condom) {
     player.stats.riskyActions += 1;
   }
@@ -3176,6 +3281,21 @@ function applyIntimacy(player, actionKey, partnerWasInfected) {
     action: actionKey,
     partnerWasInfected
   });
+}
+
+function appendCarrierRawSexProgress(summary, player) {
+  if (!player?.isCarrier) {
+    return;
+  }
+  const successes = player.stats?.successfulRawSex || 0;
+  const chance = getCarrierCondomLockChance(player);
+  if (chance <= 0) {
+    const remaining = GAME_CONFIG.carrierCondomLockMinimumRawSex - successes;
+    summary.notes.push(`帶原者任務累積 ${successes} 次；再成功 ${remaining} 次無套性交，就會開始提高對方戴套選項的上鎖機率。`);
+    return;
+  }
+  summary.chips.push({ label: `帶原者氣勢 ${Math.round(chance * 100)}%`, kind: "warn" });
+  summary.notes.push(`你已成功 ${successes} 次無套性交；之後配到你的人，兩個戴套選項有 ${Math.round(chance * 100)}% 額外機率被鎖。`);
 }
 
 function finalizeHealthAnxiety(value) {

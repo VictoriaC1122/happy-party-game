@@ -869,6 +869,50 @@ select {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.carrier-mission-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 16px;
+  padding: 16px 18px;
+  border: 1px solid rgba(143, 76, 94, 0.24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.56), transparent 38%),
+    linear-gradient(135deg, rgba(218, 184, 193, 0.74), rgba(235, 216, 220, 0.68));
+  color: #754553;
+}
+
+.carrier-mission-banner.hidden {
+  display: none;
+}
+
+.carrier-mission-banner div {
+  display: grid;
+  gap: 4px;
+}
+
+.carrier-mission-banner div > span {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.carrier-mission-banner strong {
+  line-height: 1.45;
+}
+
+.carrier-mission-progress {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .stat-card {
   padding: 18px;
 }
@@ -1512,6 +1556,15 @@ body.event-modal-open {
 
   .podium-stage {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .carrier-mission-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .carrier-mission-progress {
+    white-space: normal;
   }
 
   .podium-card.rank-1,
