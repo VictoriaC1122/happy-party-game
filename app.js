@@ -2,6 +2,9 @@ const STORAGE_KEY = "happy-party-profile-v1";
 const CONSENT_KEY = "happy-party-consent-v1";
 const HOST_PEER_PREFIX = "happy-party-host-";
 const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
+const HOST_HEARTBEAT_MS = 5000;
+const LOBBY_DISCONNECT_GRACE_MS = 18000;
+const PLAYER_RECONNECT_DELAYS_MS = [900, 1600, 2600, 4200, 6000, 8200];
 const TEST_BOT_NAMES = [
   "陪測分身阿酒",
   "氣氛組小王",
@@ -22,8 +25,13 @@ const APP = {
   peer: null,
   hostConn: null,
   hostConnections: new Map(),
+  hostDisconnectTimers: new Map(),
   hostRoom: null,
   playerSnapshot: null,
+  playerProfile: null,
+  playerReconnectTimer: null,
+  playerReconnectAttempts: 0,
+  playerReconnectActive: false,
   queuedSnapshot: null,
   actionButtonNodes: [],
   countdownState: null,
@@ -46,6 +54,7 @@ const APP = {
   hostIntervalTimer: null,
   hostSyncTimer: null,
   joinAttemptTimer: null,
+  joinHandshakePending: false,
   localPending: {
     submission: null,
     utility: null,
@@ -393,7 +402,8 @@ function createRenderSignature(snapshot) {
     ? {
         submission: APP.localPending.submission,
         utility: APP.localPending.utility,
-        roundStartedAt: APP.localPending.roundStartedAt
+        roundStartedAt: APP.localPending.roundStartedAt,
+        reconnecting: APP.playerReconnectActive
       }
     : null;
 
@@ -428,6 +438,147 @@ function isLocalTestViewPlayer(playerId) {
 function clearTestBotTimers() {
   APP.testBotTimers.forEach((timerId) => clearTimeout(timerId));
   APP.testBotTimers = [];
+}
+
+function rememberPlayerProfile(profile) {
+  APP.playerProfile = {
+    name: sanitizeName(profile?.name || ""),
+    avatar: sanitizeAvatar(profile?.avatar)
+  };
+}
+
+function stopPlayerReconnectLoop({ preserveProfile = true } = {}) {
+  clearTimeout(APP.playerReconnectTimer);
+  APP.playerReconnectTimer = null;
+  APP.playerReconnectAttempts = 0;
+  APP.playerReconnectActive = false;
+  if (!preserveProfile) {
+    APP.playerProfile = null;
+  }
+}
+
+function clearHostDisconnectTimer(playerId) {
+  const timerId = APP.hostDisconnectTimers.get(playerId);
+  if (!timerId) {
+    return;
+  }
+  clearTimeout(timerId);
+  APP.hostDisconnectTimers.delete(playerId);
+}
+
+function scheduleLobbyDisconnectCleanup(playerId) {
+  clearHostDisconnectTimer(playerId);
+  const timerId = setTimeout(() => {
+    APP.hostDisconnectTimers.delete(playerId);
+    const room = APP.hostRoom;
+    if (!room || room.phase !== "lobby") {
+      return;
+    }
+    const player = room.players[playerId];
+    if (!player || player.online !== false || APP.hostConnections.has(playerId)) {
+      return;
+    }
+    delete room.players[playerId];
+    APP.lastSentSnapshotKeys.delete(playerId);
+    hostSyncAll({ immediate: true });
+  }, LOBBY_DISCONNECT_GRACE_MS);
+  APP.hostDisconnectTimers.set(playerId, timerId);
+}
+
+function startHostHeartbeat() {
+  clearInterval(APP.hostIntervalTimer);
+  APP.hostIntervalTimer = setInterval(() => {
+    if (!APP.hostRoom) {
+      return;
+    }
+    APP.hostConnections.forEach((conn, playerId) => {
+      if (conn?.open && APP.hostRoom.players[playerId]) {
+        conn.send({ type: "heartbeat", at: Date.now() });
+      }
+    });
+  }, HOST_HEARTBEAT_MS);
+}
+
+function handleHostPeerDisconnected(peer) {
+  if (APP.peer !== peer || APP.role !== "host") {
+    return;
+  }
+  showToast("主揪訊號晃了一下，我正在幫你拉回來。");
+  if (typeof peer.reconnect === "function") {
+    try {
+      peer.reconnect();
+    } catch (error) {
+      // Ignore reconnect errors and wait for the next retry path.
+    }
+  }
+}
+
+function fallbackToJoinScreen(message) {
+  const roomCode = APP.roomCode;
+  const profile = APP.playerProfile || currentProfile();
+  destroyPeerState();
+  APP.dom.roomCodeInput.value = roomCode;
+  APP.dom.playerNameInput.value = profile.name || "";
+  APP.selectedAvatar = sanitizeAvatar(profile.avatar || APP.selectedAvatar);
+  highlightAvatarChip(APP.selectedAvatar);
+  switchScreen("join-screen");
+  showToast(message);
+}
+
+function schedulePlayerReconnect(message) {
+  if (APP.role !== "player" || !APP.playerProfile || !APP.peer) {
+    return;
+  }
+  clearLocalPendingState();
+  clearJoinAttemptState();
+  APP.playerReconnectActive = true;
+  if (APP.playerSnapshot) {
+    renderPlayerSnapshot();
+  }
+  showToast(message);
+
+  if (APP.playerReconnectAttempts >= PLAYER_RECONNECT_DELAYS_MS.length) {
+    fallbackToJoinScreen("跟主揪失聯太久了，先回入口重新滑進來。");
+    return;
+  }
+  if (APP.playerReconnectTimer) {
+    return;
+  }
+
+  const delay = PLAYER_RECONNECT_DELAYS_MS[APP.playerReconnectAttempts];
+  APP.playerReconnectTimer = setTimeout(() => {
+    APP.playerReconnectTimer = null;
+    attemptPlayerReconnect();
+  }, delay);
+}
+
+function attemptPlayerReconnect() {
+  if (APP.role !== "player" || !APP.playerProfile || !APP.peer) {
+    return;
+  }
+
+  APP.playerReconnectAttempts += 1;
+  const peer = APP.peer;
+  if (peer.destroyed) {
+    fallbackToJoinScreen("你的玩家連線整個散掉了，重新滑進來最快。");
+    return;
+  }
+  if (peer.disconnected && typeof peer.reconnect === "function") {
+    try {
+      peer.reconnect();
+    } catch (error) {
+      // Ignore reconnect errors and keep trying the data channel path.
+    }
+  }
+  wirePlayerPeer(APP.playerProfile, { isReconnect: true });
+}
+
+function handlePlayerConnectionDropped(conn, message) {
+  if (APP.hostConn !== conn) {
+    return;
+  }
+  APP.hostConn = null;
+  schedulePlayerReconnect(message);
 }
 
 function setTestView(playerId) {
@@ -705,9 +856,14 @@ function attemptCreateHostPeer(profile, attempts) {
     APP.hostPeerId = hostPeerId;
     APP.hostRoom = createHostRoom(profile);
     wireHostPeer(peer);
+    startHostHeartbeat();
     renderHostSnapshot();
     switchScreen("lobby-screen");
     showToast("桌子開好啦，快把掃碼圖丟出去抓人。");
+  });
+
+  peer.on("disconnected", () => {
+    handleHostPeerDisconnected(peer);
   });
 
   peer.on("error", (error) => {
@@ -746,8 +902,8 @@ function wireHostPeer(peer) {
   peer.on("connection", (conn) => {
     conn.on("open", () => {
       conn.on("data", (data) => handleHostMessage(conn, data));
-      conn.on("close", () => handleHostDisconnect(conn.peer));
-      conn.on("error", () => handleHostDisconnect(conn.peer));
+      conn.on("close", () => handleHostDisconnect(conn.peer, conn));
+      conn.on("error", () => handleHostDisconnect(conn.peer, conn));
     });
   });
 }
@@ -803,6 +959,7 @@ function handleJoinSubmit(event) {
 
   saveStoredProfile({ name, avatar });
   destroyPeerState();
+  rememberPlayerProfile({ name, avatar });
   setJoinFormBusy(true, "潛入中…");
   showToast("正在找主揪對暗號，等我一下。");
   createPlayerPeer(roomCode, { name, avatar });
@@ -811,6 +968,7 @@ function handleJoinSubmit(event) {
 function createPlayerPeer(roomCode, profile) {
   const peerId = `happy-party-player-${randomId(12)}`;
   const peer = new Peer(peerId);
+  rememberPlayerProfile(profile);
 
   peer.on("open", (id) => {
     APP.role = "player";
@@ -819,52 +977,80 @@ function createPlayerPeer(roomCode, profile) {
     APP.roomCode = roomCode;
     APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
     APP.playerSnapshot = null;
+    APP.playerReconnectAttempts = 0;
+    APP.playerReconnectActive = false;
     renderJoiningLobby(profile, roomCode, "潛入中");
-    startJoinAttemptTimeout();
-    wirePlayerPeer(profile);
+    wirePlayerPeer(profile, { isReconnect: false });
+  });
+
+  peer.on("disconnected", () => {
+    if (APP.peer !== peer || APP.role !== "player") {
+      return;
+    }
+    if (typeof peer.reconnect === "function") {
+      try {
+        peer.reconnect();
+      } catch (error) {
+        // Ignore reconnect errors and fall back to the data-channel retry loop.
+      }
+    }
+    if (!APP.hostConn?.open) {
+      schedulePlayerReconnect("手機訊號晃了一下，我正在幫你接回主揪。");
+    }
   });
 
   peer.on("error", (error) => {
+    const errorType = error?.type || error?.message || "unknown";
+    if (
+      APP.peer === peer
+      && APP.role === "player"
+      && APP.playerProfile
+      && !APP.hostConn?.open
+      && errorType !== "browser-incompatible"
+    ) {
+      schedulePlayerReconnect("手機訊號卡了一下，我再幫你敲一次主揪。");
+      return;
+    }
     clearJoinAttemptState();
     if (!APP.playerSnapshot) {
       switchScreen("join-screen");
     }
-    showToast(`滑進包廂失敗：${error.type || error.message}`);
+    showToast(`滑進包廂失敗：${errorType}`);
   });
 }
 
-function wirePlayerPeer(profile) {
+function wirePlayerPeer(profile, options = {}) {
+  if (!APP.peer || !APP.hostPeerId) {
+    return;
+  }
+  if (APP.hostConn?.open) {
+    return;
+  }
+
   const conn = APP.peer.connect(APP.hostPeerId, { reliable: true });
   APP.hostConn = conn;
 
   conn.on("open", () => {
-    renderJoiningLobby(profile, APP.roomCode, "等主揪點頭");
+    if (!APP.playerSnapshot) {
+      renderJoiningLobby(profile, APP.roomCode, options.isReconnect ? "重新對暗號" : "等主揪點頭");
+    }
     startJoinAttemptTimeout();
     conn.send({
       type: "join-request",
       payload: {
         name: profile.name,
-        avatar: profile.avatar
+        avatar: profile.avatar,
+        reconnecting: Boolean(options.isReconnect)
       }
     });
   });
 
   conn.on("data", handlePlayerMessage);
   conn.on("close", () => {
-    clearLocalPendingState();
-    clearJoinAttemptState();
-    if (!APP.playerSnapshot) {
-      switchScreen("join-screen");
-    }
-    showToast("你跟主揪斷線了，重新滑進來吧。");
+    handlePlayerConnectionDropped(conn, "你跟主揪斷了一下，我正在幫你接回去。");
   });
   conn.on("error", () => {
-    clearLocalPendingState();
-    clearJoinAttemptState();
-    if (!APP.playerSnapshot) {
-      switchScreen("join-screen");
-    }
-    showToast("連線突然散掉了，重新整理再衝一次。");
+    handlePlayerConnectionDropped(conn, "連線突然散掉了，我正在幫你重拉。");
   });
 }
 
@@ -875,7 +1061,34 @@ function handleHostMessage(conn, packet) {
 
   if (packet.type === "join-request") {
     const room = APP.hostRoom;
-    if (!room || room.phase !== "lobby") {
+    if (!room) {
+      conn.send({ type: "join-rejected", reason: "主揪這桌剛剛收起來了。" });
+      conn.close();
+      return;
+    }
+
+    const playerId = conn.peer;
+    const existingPlayer = room.players[playerId];
+    if (existingPlayer) {
+      const existingConn = APP.hostConnections.get(playerId);
+      if (existingConn && existingConn !== conn) {
+        try {
+          existingConn.close();
+        } catch (error) {
+          // Ignore reconnect cleanup errors.
+        }
+      }
+      clearHostDisconnectTimer(playerId);
+      APP.hostConnections.set(playerId, conn);
+      APP.lastSentSnapshotKeys.delete(playerId);
+      existingPlayer.online = true;
+      existingPlayer.name = sanitizeName(packet.payload?.name || existingPlayer.name);
+      existingPlayer.avatar = sanitizeAvatar(packet.payload?.avatar || existingPlayer.avatar);
+      hostSyncAll({ immediate: true });
+      return;
+    }
+
+    if (room.phase !== "lobby") {
       conn.send({ type: "join-rejected", reason: "這桌已經開喝了，這局先別硬擠。" });
       conn.close();
       return;
@@ -888,10 +1101,9 @@ function handleHostMessage(conn, packet) {
       return;
     }
 
-    const playerId = conn.peer;
     APP.hostConnections.set(playerId, conn);
     room.players[playerId] = createPlayerState(playerId, packet.payload || {}, false);
-    hostSyncAll();
+    hostSyncAll({ immediate: true });
     return;
   }
 
@@ -915,18 +1127,21 @@ function handleHostMessage(conn, packet) {
   }
 }
 
-function handleHostDisconnect(playerId) {
+function handleHostDisconnect(playerId, conn = null) {
   const room = APP.hostRoom;
+  const activeConn = APP.hostConnections.get(playerId);
+  if (conn && activeConn && activeConn !== conn) {
+    return;
+  }
   APP.hostConnections.delete(playerId);
   APP.lastSentSnapshotKeys.delete(playerId);
   if (!room || !room.players[playerId]) {
     return;
   }
 
+  room.players[playerId].online = false;
   if (room.phase === "lobby") {
-    delete room.players[playerId];
-  } else {
-    room.players[playerId].online = false;
+    scheduleLobbyDisconnectCleanup(playerId);
   }
   hostSyncAll({ immediate: true });
 }
@@ -949,11 +1164,22 @@ function handlePlayerMessage(packet) {
     return;
   }
 
+  if (packet.type === "heartbeat") {
+    return;
+  }
+
   if (packet.type === "snapshot") {
+    const hadSnapshot = Boolean(APP.playerSnapshot);
+    const wasReconnecting = APP.playerReconnectActive;
     clearJoinAttemptState();
     APP.playerSnapshot = packet.snapshot;
+    APP.playerReconnectAttempts = 0;
+    APP.playerReconnectActive = false;
     reconcileLocalPendingState(packet.snapshot);
     renderPlayerSnapshot();
+    if (wasReconnecting && hadSnapshot) {
+      showToast("跟主揪接回來了，繼續玩。");
+    }
   }
 }
 
@@ -1269,8 +1495,9 @@ function renderRound(snapshot) {
   const round = snapshot.round;
   const pendingSubmission = snapshot.role === "player" ? APP.localPending.submission : null;
   const pendingUtility = snapshot.role === "player" ? APP.localPending.utility : null;
+  const reconnecting = snapshot.role === "player" && APP.playerReconnectActive;
   const effectiveSubmission = round.submission || pendingSubmission;
-  const isLocked = Boolean(effectiveSubmission || pendingUtility);
+  const isLocked = Boolean(effectiveSubmission || pendingUtility || reconnecting);
   APP.dom.roundTitle.textContent = `第 ${snapshot.roundIndex} 局 / ${snapshot.roundCount}`;
   APP.dom.selfRolePill.textContent = describeRolePill(self);
   APP.dom.desireValue.textContent = `${self.desire}%`;
@@ -1294,10 +1521,10 @@ function renderRound(snapshot) {
     APP.dom.partnerFlirt.textContent = `「${round.partner.flirt}」`;
     renderPartnerTags(round.partner, self.anxiety);
     setPartnerToolState(true, isLocked);
-    renderActionButtonStates(round.availableActions, effectiveSubmission, false, Boolean(pendingUtility));
+    renderActionButtonStates(round.availableActions, effectiveSubmission, false, Boolean(pendingUtility || reconnecting));
   }
 
-  updateSubmissionCard(effectiveSubmission, round.partner, pendingUtility, !round.partner);
+  updateSubmissionCard(effectiveSubmission, round.partner, pendingUtility, !round.partner, reconnecting);
   startCountdown(round.deadlineAt, round.submissionProgress, snapshot.role === "host");
 }
 
@@ -1366,12 +1593,17 @@ function renderActionButtonStates(availableActions, submittedAction, noPartner, 
   });
 }
 
-function updateSubmissionCard(submission, partner, pendingUtility, noPartner) {
+function updateSubmissionCard(submission, partner, pendingUtility, noPartner, reconnecting = false) {
   if (submission) {
     APP.dom.submittedActionLabel.textContent = ACTIONS[submission].shortLabel;
     APP.dom.submissionHint.textContent = APP.localPending.submission && !APP.playerSnapshot?.round?.submission
       ? "你的選擇正飛去主揪那邊…"
       : "你已鎖牌，等主揪翻牌。";
+    return;
+  }
+  if (reconnecting) {
+    APP.dom.submittedActionLabel.textContent = "訊號拉回中";
+    APP.dom.submissionHint.textContent = "你跟主揪剛剛斷了一下，我正在幫你重接，先別急著亂按。";
     return;
   }
   if (pendingUtility) {
@@ -2549,19 +2781,20 @@ function setJoinFormBusy(isBusy, label = "我要入桌") {
 
 function startJoinAttemptTimeout() {
   clearTimeout(APP.joinAttemptTimer);
+  APP.joinHandshakePending = true;
   APP.joinAttemptTimer = setTimeout(() => {
-    if (APP.playerSnapshot || APP.role !== "player") {
+    if (!APP.joinHandshakePending || APP.role !== "player") {
       return;
     }
-    destroyPeerState();
-    switchScreen("join-screen");
-    showToast("滑進包廂超時了，檢查一下房號再試一次。");
+    APP.joinHandshakePending = false;
+    schedulePlayerReconnect("主揪那邊還沒回你，我幫你再敲一次門。");
   }, 12000);
 }
 
 function clearJoinAttemptState() {
   clearTimeout(APP.joinAttemptTimer);
   APP.joinAttemptTimer = null;
+  APP.joinHandshakePending = false;
   setJoinFormBusy(false);
 }
 
@@ -2645,7 +2878,10 @@ function destroyPeerState() {
   clearTimeout(APP.hostDeadlineTimer);
   clearTimeout(APP.hostSyncTimer);
   clearTimeout(APP.joinAttemptTimer);
-  clearTimeout(APP.hostIntervalTimer);
+  clearInterval(APP.hostIntervalTimer);
+  clearTimeout(APP.playerReconnectTimer);
+  APP.hostDisconnectTimers.forEach((timerId) => clearTimeout(timerId));
+  APP.hostDisconnectTimers.clear();
   APP.hostConnections.forEach((conn) => {
     try {
       conn.close();
@@ -2672,6 +2908,7 @@ function destroyPeerState() {
   APP.hostConn = null;
   APP.hostRoom = null;
   APP.playerSnapshot = null;
+  APP.joinHandshakePending = false;
   APP.role = null;
   APP.selfId = "";
   APP.roomCode = "";
@@ -2680,6 +2917,7 @@ function destroyPeerState() {
   APP.hostIntervalTimer = null;
   APP.hostSyncTimer = null;
   APP.joinAttemptTimer = null;
+  stopPlayerReconnectLoop({ preserveProfile: false });
   clearJoinAttemptState();
   clearLocalPendingState();
   syncTestLab();
