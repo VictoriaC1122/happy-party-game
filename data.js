@@ -5,7 +5,7 @@ const GAME_CONFIG = {
   roundCount: 10,
   initialCarrierCount: 6,
   finalWinnerCount: 6,
-  roundDurationMs: 30 * 1000,
+  roundDurationMs: 45 * 1000,
   startDissatisfaction: 0,
   startHealthAnxiety: 0,
   hospitalDissatisfactionGain: 10,

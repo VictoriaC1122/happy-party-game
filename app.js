@@ -2717,7 +2717,7 @@ function applyTimeoutDefaultSummary(summary, partnerName, wasOverridden) {
     summary.notes.unshift("時間到沒選，本來會默認「換一個」，但這局的欲求不滿事件蓋過了所有選項。");
     return;
   }
-  summary.body = `30 秒到了，你還沒出牌，系統直接幫你換掉 ${partnerName}。`;
+  summary.body = `45 秒到了，你還沒出牌，系統直接幫你換掉 ${partnerName}。`;
   summary.notes.unshift("時間到沒選，這局已經默認「換一個」。");
 }
 
