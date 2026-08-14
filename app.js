@@ -2802,24 +2802,26 @@ function handleHostAdvance() {
 function finalizeHostedGame() {
   const room = APP.hostRoom;
   const players = Object.values(room.players);
-  const everyoneInfected = players.every((player) => player.isInfected);
-  const selection = selectFinalWinners(players, everyoneInfected);
+  const activePlayers = players.filter((player) => player.intimacyCount > 0);
+  const activePlayersAllInfected = activePlayers.length > 0
+    && activePlayers.every((player) => player.isInfected);
+  const selection = selectFinalWinners(players, activePlayersAllInfected);
   const winnerById = new Map(selection.entries.map((entry) => [entry.player.id, entry]));
   const finalResults = {};
 
   players.forEach((player) => {
     const winner = winnerById.get(player.id) || null;
-    const scoreCard = everyoneInfected
+    const scoreCard = activePlayersAllInfected
       ? calculateCarrierStageScore(player)
       : calculateSurvivalScore(player);
     let kind = "lose";
     let label = "今晚翻車";
     let detail = `親密 ${player.intimacyCount} 次，終局是${player.isInfected ? "感染" : "健康"}，生存分 ${scoreCard.score}。`;
 
-    if (winner && everyoneInfected) {
+    if (winner && activePlayersAllInfected) {
       kind = "carrier";
       label = `帶原勝利 · 第 ${winner.rank} 席`;
-      detail = `全場淪陷任務成功；你帶出 ${player.transmissionCount} 次傳播，站上第 ${winner.rank} 席。`;
+      detail = `有下場的人全感染，帶原任務成功；你帶出 ${player.transmissionCount} 次傳播，站上第 ${winner.rank} 席。`;
     } else if (winner) {
       kind = "winner";
       label = `${player.isInfected ? "逆風勝利" : "健康勝利"} · 第 ${winner.rank} 席`;
@@ -2828,10 +2830,10 @@ function finalizeHostedGame() {
       kind = "lose";
       label = "全程觀望王";
       detail = "你一路看到最後都沒真正下場，遊戲直接判你白來。";
-    } else if (everyoneInfected) {
+    } else if (activePlayersAllInfected) {
       kind = "lose";
-      label = "全場淪陷";
-      detail = "全場雖然中標，但這局是 6 位初始帶原者的陣營勝利。";
+      label = "下場就中標";
+      detail = "扣掉全程觀望者，有下場的人全部感染；這局是 6 位初始帶原者的陣營勝利。";
     } else if (player.isCarrier) {
       kind = "lose";
       label = "帶原任務失敗";
@@ -2856,13 +2858,13 @@ function finalizeHostedGame() {
   });
 
   room.finalResults = finalResults;
-  room.finale = buildFinale(players, selection, everyoneInfected, finalResults);
+  room.finale = buildFinale(players, selection, activePlayersAllInfected, finalResults);
   room.phase = "awards";
   hostSyncAll({ immediate: true });
 }
 
-function selectFinalWinners(players, everyoneInfected) {
-  if (everyoneInfected) {
+function selectFinalWinners(players, activePlayersAllInfected) {
+  if (activePlayersAllInfected) {
     const entries = players
       .filter((player) => player.isCarrier)
       .map((player) => ({
@@ -2943,13 +2945,13 @@ function stableFinalTieValue(playerId) {
   return hash >>> 0;
 }
 
-function buildFinale(players, selection, everyoneInfected, finalResults) {
+function buildFinale(players, selection, activePlayersAllInfected, finalResults) {
   const winnerCount = selection.entries.length;
-  const heading = everyoneInfected
-    ? "全場淪陷，六位帶原者包下舞台"
+  const heading = activePlayersAllInfected
+    ? "有下場的全淪陷，六位帶原者包下舞台"
     : `${winnerCount} 位終局勝利者上台`;
-  const body = everyoneInfected
-    ? "收官時全場通通中標，6 位初始帶原者共同獲勝；舞台順序只看誰最會帶節奏。"
+  const body = activePlayersAllInfected
+    ? "0 次親密的人先判輸並排除；其餘有下場的人全部感染，6 位初始帶原者共同獲勝。"
     : `健康者優先，再按生存分補滿 6 席。今晚共有 ${winnerCount} 位符合親密資格的玩家站上舞台。`;
 
   const podium = buildWinnerPodium(selection);
