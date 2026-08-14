@@ -2699,6 +2699,28 @@ function allRoundActionsSubmitted() {
     .every((playerId) => Boolean(room.round.submissions[playerId]));
 }
 
+function applyRoundTimeoutDefaults(room) {
+  const autoRefusedPlayerIds = new Set();
+  Object.entries(room.round.pairMap).forEach(([playerId, partnerId]) => {
+    if (!partnerId || room.round.submissions[playerId]) {
+      return;
+    }
+    room.round.submissions[playerId] = "refuse";
+    autoRefusedPlayerIds.add(playerId);
+  });
+  room.round.autoRefusedPlayerIds = [...autoRefusedPlayerIds];
+  return autoRefusedPlayerIds;
+}
+
+function applyTimeoutDefaultSummary(summary, partnerName, wasOverridden) {
+  if (wasOverridden) {
+    summary.notes.unshift("時間到沒選，本來會默認「換一個」，但這局的欲求不滿事件蓋過了所有選項。");
+    return;
+  }
+  summary.body = `30 秒到了，你還沒出牌，系統直接幫你換掉 ${partnerName}。`;
+  summary.notes.unshift("時間到沒選，這局已經默認「換一個」。");
+}
+
 function resolveHostedRound() {
   const room = APP.hostRoom;
   if (!room || !room.round || room.round.resolved) {
@@ -2708,6 +2730,7 @@ function resolveHostedRound() {
   clearTestBotTimers();
   clearTimeout(APP.hostDeadlineTimer);
   room.round.resolved = true;
+  const autoRefusedPlayerIds = applyRoundTimeoutDefaults(room);
 
   const privateSummaries = {};
   const publicCounter = {
@@ -2757,6 +2780,14 @@ function resolveHostedRound() {
     const leftAction = room.round.submissions[leftId] || "refuse";
     const rightAction = room.round.submissions[rightId] || "refuse";
     const result = resolvePair(leftId, rightId, leftAction, rightAction, room.roundIndex);
+    const forcedRawSex = room.round.private[leftId]?.forcedAction === "sex_raw"
+      || room.round.private[rightId]?.forcedAction === "sex_raw";
+    if (autoRefusedPlayerIds.has(leftId)) {
+      applyTimeoutDefaultSummary(result.left, room.players[rightId].name, forcedRawSex);
+    }
+    if (autoRefusedPlayerIds.has(rightId)) {
+      applyTimeoutDefaultSummary(result.right, room.players[leftId].name, forcedRawSex);
+    }
     privateSummaries[leftId] = result.left;
     privateSummaries[rightId] = result.right;
     publicCounter.intimateEvents += result.public.intimateEvents;
