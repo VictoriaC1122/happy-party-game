@@ -148,7 +148,9 @@ select {
 .hero-card,
 .panel {
   border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
   background: linear-gradient(180deg, rgba(252, 250, 249, 0.95), rgba(239, 225, 229, 0.9));
+  background-clip: padding-box;
   backdrop-filter: blur(20px);
   box-shadow: var(--shadow);
 }
@@ -459,6 +461,7 @@ select {
 .test-lab {
   display: grid;
   gap: 16px;
+  padding: 24px;
 }
 
 .test-lab-grid {
@@ -649,6 +652,7 @@ select {
 
 .inset-panel {
   padding: 18px;
+  border-radius: var(--radius-lg);
 }
 
 .player-list,
@@ -1278,7 +1282,8 @@ select {
   }
 
   .hero-card,
-  .screen {
+  .screen,
+  .test-lab {
     padding: 18px;
     border-radius: 24px;
   }
