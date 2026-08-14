@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chiron+Hei+HK:wght@400;500;700;800&family=DM+Sans:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260814i">
+  <link rel="stylesheet" href="./styles.css?v=20260814j">
 </head>
 <body>
   <div class="backdrop"></div>
@@ -211,13 +211,13 @@
         <span id="phase-pill" class="phase-pill">等開桌</span>
       </div>
       <div class="lobby-grid">
-        <article class="notice-card">
+        <article class="notice-card lobby-access-card">
           <h3>這桌資訊</h3>
-          <div class="info-pair">
+          <div class="info-pair room-code-pair">
             <span>房號</span>
             <strong id="room-code-display">------</strong>
           </div>
-          <div class="info-pair">
+          <div class="info-pair join-link-pair">
             <span>加入連結</span>
             <strong id="join-link-display">主揪開桌後就會冒出來</strong>
           </div>
@@ -232,7 +232,7 @@
           </div>
         </article>
 
-        <article class="notice-card">
+        <article class="notice-card lobby-rules-card">
           <h3>今晚規矩</h3>
           <ul class="plain-list compact">
             <li>12 到 40 人最熱鬧，8 人是最低開桌門檻。</li>
@@ -246,14 +246,15 @@
         </article>
       </div>
 
-      <article class="panel inset-panel">
+      <article class="panel inset-panel player-wall">
         <div class="panel-head compact-head">
           <div>
-            <p class="eyebrow">到場名單</p>
-            <h3><span id="player-count-display">0</span> / 40</h3>
+            <p class="eyebrow">大螢幕玩家牆</p>
+            <h3><span id="player-count-display">0</span> 人已上線</h3>
+            <p class="player-wall-hint">掃碼進場後，你的名字會直接跳上這面牆。</p>
           </div>
         </div>
-        <div id="player-list" class="player-list"></div>
+        <div id="player-list" class="player-list" aria-live="polite"></div>
       </article>
     </section>
 
@@ -389,6 +390,6 @@
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="./vendor/qrcode.min.js?v=20260814b"></script>
   <script src="./data.js?v=20260814d"></script>
-  <script src="./app.js?v=20260814j"></script>
+  <script src="./app.js?v=20260814k"></script>
 </body>
 </html>

@@ -36,6 +36,7 @@ const APP = {
   actionButtonNodes: [],
   countdownState: null,
   lastSentSnapshotKeys: new Map(),
+  lobbyPlayerIds: new Set(),
   testBotTimers: [],
   testViewPlayerId: "",
   lastToast: {
@@ -208,6 +209,7 @@ function cacheDom() {
     playerNameInput: document.getElementById("player-name-input"),
     hostNameInput: document.getElementById("host-name-input"),
     avatarPicker: document.getElementById("avatar-picker"),
+    lobbyScreen: document.getElementById("lobby-screen"),
     lobbyTitle: document.getElementById("lobby-title"),
     phasePill: document.getElementById("phase-pill"),
     roomCodeDisplay: document.getElementById("room-code-display"),
@@ -1261,6 +1263,8 @@ function renderPlayerSnapshot(snapshot = null) {
 }
 
 function renderJoiningLobby(profile, roomCode, phaseLabel) {
+  APP.dom.lobbyScreen.classList.remove("host-lobby");
+  APP.dom.lobbyScreen.classList.add("player-lobby");
   APP.dom.lobbyTitle.textContent = "正在滑進包廂…";
   APP.dom.phasePill.textContent = phaseLabel;
   APP.dom.roomCodeDisplay.textContent = roomCode;
@@ -1446,8 +1450,11 @@ function renderSnapshot(snapshot) {
 }
 
 function renderLobby(snapshot) {
-  APP.dom.lobbyTitle.textContent = snapshot.role === "host" ? "等人到齊再開喝" : "你已卡位，等主揪發車";
-  APP.dom.phasePill.textContent = "等開桌";
+  const isHostLobby = snapshot.role === "host";
+  APP.dom.lobbyScreen.classList.toggle("host-lobby", isHostLobby);
+  APP.dom.lobbyScreen.classList.toggle("player-lobby", !isHostLobby);
+  APP.dom.lobbyTitle.textContent = isHostLobby ? "掃碼上牆，人齊就開喝" : "你上大螢幕了！";
+  APP.dom.phasePill.textContent = isHostLobby ? `${snapshot.players.length} 人已上線` : "等主揪發車";
   APP.dom.roomCodeDisplay.textContent = snapshot.roomCode;
   APP.dom.joinLinkDisplay.textContent = snapshot.joinLink;
   APP.dom.playerCountDisplay.textContent = String(snapshot.players.length);
@@ -1459,17 +1466,20 @@ function renderLobby(snapshot) {
 
   if (snapshot.role === "host") {
     APP.dom.qrWrap.classList.remove("hidden");
-    renderQrCode(snapshot.joinLink);
+    renderQrCode(snapshot.joinLink, 220);
   } else {
     APP.dom.qrWrap.classList.add("hidden");
   }
 
+  const previousPlayerIds = APP.lobbyPlayerIds;
+  const currentPlayerIds = new Set(snapshot.players.map((player) => player.id));
   const fragment = document.createDocumentFragment();
   snapshot.players.forEach((player) => {
     const identityLabel = player.isHost ? "主揪" : player.isBot ? "陪測分身" : "玩家";
     const statusLabel = player.online ? (player.isBot ? "待命中" : "已卡位") : "斷線中";
     const row = document.createElement("article");
-    row.className = `player-row${player.online ? "" : " offline"}`;
+    const justJoined = isHostLobby && previousPlayerIds.size > 0 && !previousPlayerIds.has(player.id);
+    row.className = `player-row${isHostLobby ? " player-tile" : ""}${player.online ? "" : " offline"}${justJoined ? " just-joined" : ""}`;
     row.innerHTML = `
       <div class="player-avatar">${player.avatar}</div>
       <div class="player-meta">
@@ -1481,6 +1491,7 @@ function renderLobby(snapshot) {
     fragment.appendChild(row);
   });
   APP.dom.playerList.replaceChildren(fragment);
+  APP.lobbyPlayerIds = currentPlayerIds;
 }
 
 function renderQrCanvas(target, link, width = 180) {
@@ -1846,8 +1857,13 @@ function startSoloTestGame() {
 
   ensureSoloTestPlayers(room);
   APP.testViewPlayerId = "";
-  showToast("陪測分身已火速就位，現在一支手機也能把整桌跑完。");
-  startHostedGame();
+  hostSyncAll({ immediate: true });
+  showToast("陪測分身正在跳上玩家牆，馬上開演。");
+  setTimeout(() => {
+    if (APP.hostRoom === room && room.phase === "lobby" && room.testMode) {
+      startHostedGame();
+    }
+  }, 2600);
 }
 
 function startHostedGame() {
