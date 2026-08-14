@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chiron+Hei+HK:wght@400;500;700;800&family=DM+Sans:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260814b">
+  <link rel="stylesheet" href="./styles.css?v=20260814e">
 </head>
 <body>
   <div class="backdrop"></div>
@@ -60,7 +60,7 @@
           </div>
           <div class="info-pair">
             <span>加入連結</span>
-            <strong id="test-lab-join-link">先開桌才會冒出來</strong>
+            <strong id="test-lab-join-link">開桌後就會冒出來</strong>
           </div>
           <div class="qr-wrap mini-qr-wrap">
             <div id="test-qr-code"></div>
@@ -76,22 +76,55 @@
     <section id="consent-screen" class="panel screen active">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">開桌前先講好</p>
-          <h2>先瞄一下再進場</h2>
+          <p class="eyebrow">開喝前看一下</p>
+          <h2>這桌在玩什麼，這裡講白</h2>
         </div>
       </div>
       <div class="stack">
         <article class="notice-card">
-          <h3>這桌先提醒</h3>
-          <p>建議成年玩家再上桌。這是虛構的風險判斷派對遊戲，不是交友軟體，也不是現實教戰守則。</p>
+          <h3>這桌說白了</h3>
+          <p>建議成年玩家再上桌。這是虛構的風險判斷派對遊戲，不是交友軟體，也不是現實教戰守則。遊戲裡可以靠運氣亂飛，現實裡還是要靠保護、溝通跟檢測。</p>
         </article>
         <article class="notice-card">
-          <h3>如果看到怪東西</h3>
-          <p>這裡不會叫你下載奇怪 App、交出個資或掏錢。要是忽然冒出登入、付款、安裝包，直接把它當怪東西關掉。</p>
+          <h3>性病不是看外表猜</h3>
+          <p>很多性病一開始根本沒什麼症狀，看起來乾乾淨淨、講話很會、氣氛很滿，都不等於真的安全。這桌故意把「看起來沒事」做成最容易翻車的陷阱。</p>
         </article>
         <article class="notice-card">
-          <h3>今晚規則超短版</h3>
-          <p>主揪一按開始，全場會隨機冒出 6 位帶原者。大家得在有限回合裡邊判斷邊亂鬥，至少得有一次親密互動，不然直接空手出局。</p>
+          <h3>口交也不是零風險</h3>
+          <p>不要以為只有做到最後一步才算有事。口交、無套、共用玩具、喝太嗨判斷下線，現實裡都可能讓風險往上衝。保護措施能降風險，但不是開無敵。</p>
+        </article>
+        <div class="education-grid">
+          <article class="notice-card education-card">
+            <p class="education-kicker">現實版重點</p>
+            <h3>最容易搞錯的 3 件事</h3>
+            <ul class="plain-list compact education-list">
+              <li>沒症狀，不代表沒感染。</li>
+              <li>看起來健康，不代表真的安全。</li>
+              <li>只做一點點，也不代表完全沒風險。</li>
+            </ul>
+          </article>
+          <article class="notice-card education-card">
+            <p class="education-kicker">真的比較穩</p>
+            <h3>現實別跟命運猜拳</h3>
+            <ul class="plain-list compact education-list">
+              <li>保險套或口交膜可以降風險，但不是萬能護身符。</li>
+              <li>真的有在玩，就把定期篩檢排進行事曆。</li>
+              <li>哪裡怪怪的就停，別靠腦補硬撐。</li>
+            </ul>
+          </article>
+          <article class="notice-card education-card">
+            <p class="education-kicker">這款遊戲怎麼判</p>
+            <h3>等一下你會怎麼玩</h3>
+            <ul class="plain-list compact education-list">
+              <li>主揪一按開始，全場會暗抽 6 位帶原者。</li>
+              <li>整晚共 7 局，亂入事件會一直把局面帶歪。</li>
+              <li>玩到最後如果一次親密互動都沒有，會直接判你白來。</li>
+            </ul>
+          </article>
+        </div>
+        <article class="notice-card education-callout">
+          <h3>如果真的擔心，現實答案不是猜，是去驗</h3>
+          <p>遊戲裡按醫院是翻牌機制；現實裡真的有風險、症狀、或心裡毛毛的，最有用的不是硬猜，是找醫療院所或檢測資源確認。</p>
         </article>
       </div>
       <label class="consent-box">
@@ -99,7 +132,7 @@
         <span>我知道這只是派對遊戲，不是現實邀約，也不是鼓勵亂來。</span>
       </label>
       <div class="actions-row">
-        <button id="consent-continue" class="primary-btn" disabled>好，讓我進場</button>
+        <button id="consent-continue" class="primary-btn" disabled>看懂了，讓我進場</button>
       </div>
     </section>
 
@@ -124,7 +157,7 @@
         <article class="mode-card">
           <p class="mode-icon">📱</p>
           <h3>我是來鬧的玩家</h3>
-          <p>輸入房號或直接掃碼滑進來，先取綽號，然後等主揪一聲令下。</p>
+          <p>輸入房號或直接掃碼滑進來，取個綽號就等主揪發車。</p>
           <button id="goto-join-btn" class="secondary-btn">手動輸房號</button>
         </article>
         <article class="mode-card">
@@ -132,7 +165,7 @@
           <h3>這桌怎麼玩</h3>
           <ul class="plain-list compact">
             <li>整晚 7 局，最多 40 個人一起亂。</li>
-            <li>開局先暗抽 6 位帶原者。</li>
+            <li>開局會暗抽 6 位帶原者。</li>
             <li>每局都可能有無厘頭亂入，讓風險突然往上飆。</li>
             <li>玩到最後如果一次親密互動都沒有，遊戲直接判你空手出局。</li>
             <li>如果最後還有人乾乾淨淨，那些人就是今晚倖存王。</li>
@@ -160,7 +193,7 @@
           <input id="player-name-input" type="text" maxlength="18" placeholder="大家今晚要怎麼叫你" autocomplete="off">
         </label>
         <label class="field">
-          <span>你的門面</span>
+          <span>你的門面 · 40 款，往下還有</span>
           <div id="avatar-picker" class="avatar-picker"></div>
         </label>
         <div class="actions-row">
@@ -173,7 +206,7 @@
       <div class="panel-head">
         <div>
           <p class="eyebrow">人還在集合</p>
-          <h2 id="lobby-title">大家先入座</h2>
+          <h2 id="lobby-title">大家卡位中</h2>
         </div>
         <span id="phase-pill" class="phase-pill">等開桌</span>
       </div>
@@ -267,14 +300,14 @@
             <div>
               <p class="eyebrow">這局對到誰</p>
               <h3 id="partner-name">還在抽人</h3>
-              <p id="partner-flirt" class="partner-flirt">「主揪還沒發牌，先別急著貼太近。」</p>
+              <p id="partner-flirt" class="partner-flirt">「主揪還沒發牌，別急著貼太近。」</p>
             </div>
           </div>
           <div id="partner-tags" class="tag-cloud"></div>
           <div class="partner-tools">
             <button id="chat-btn" class="secondary-btn slim-btn">💬 嘴兩句</button>
             <button id="test-btn" class="secondary-btn slim-btn">🧪 偷測一下</button>
-            <button id="hospital-btn" class="ghost-btn slim-btn">🏥 先去驗</button>
+            <button id="hospital-btn" class="ghost-btn slim-btn">🏥 去驗一下</button>
           </div>
         </article>
 
@@ -331,6 +364,15 @@
         <p id="finale-body">主揪正在整理今晚誰飛天、誰翻車。</p>
       </article>
       <div id="podium-stage" class="podium-stage"></div>
+      <article id="replay-panel" class="panel inset-panel hidden">
+        <div class="panel-head compact-head">
+          <div>
+            <p class="eyebrow">個人回測</p>
+            <h3 id="replay-heading">這晚到底怎麼演歪的</h3>
+          </div>
+        </div>
+        <div id="replay-list" class="replay-list"></div>
+      </article>
       <article class="panel inset-panel">
         <div class="panel-head compact-head">
           <div>
@@ -350,7 +392,7 @@
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="./vendor/qrcode.min.js?v=20260814b"></script>
-  <script src="./data.js?v=20260814b"></script>
-  <script src="./app.js?v=20260814c"></script>
+  <script src="./data.js?v=20260814c"></script>
+  <script src="./app.js?v=20260814f"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ const TEST_BOT_NAMES = [
   "氣氛組小王",
   "亂入系阿桃",
   "今晚很敢姐",
-  "先看看阿北",
+  "觀望派阿北",
   "嘴很甜小美",
   "滑進來老張",
   "卡位系阿球",
@@ -65,63 +65,63 @@ const APP = {
 const ROUND_EVENT_DECK = [
   {
     icon: "🦜",
-    blockedActions: ["oral_condom"],
-    badge: "我今天就是不想",
-    detail: "對方把頭一偏說：「我今天就是不想。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_condom", "sex_condom"],
+    badge: "今天不要塑膠感",
+    detail: "對方一秒表態：「今天不要塑膠感。」這局所有戴套選項都直接封印。"
   },
   {
     icon: "🎈",
-    blockedActions: ["oral_condom"],
-    badge: "嘴巴今天公休",
-    detail: "對方一本正經地宣布：「嘴巴今天公休，明天再來。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_condom", "sex_condom"],
+    badge: "不要中場拆包裝",
+    detail: "對方勾勾手指說：「不要中場拆包裝，氣氛會冷掉。」這局所有戴套選項都不能按。"
   },
   {
     icon: "🪩",
-    blockedActions: ["oral_condom"],
-    badge: "這個我先不要",
-    detail: "對方眨眨眼只回你一句：「這個我先不要。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_condom", "sex_condom"],
+    badge: "今天走直球派",
+    detail: "對方笑得超直接：「今天走直球派，不要那層。」這局不能選任何戴套路線。"
   },
   {
     icon: "🍸",
-    blockedActions: ["oral_condom"],
+    blockedActions: ["oral_condom", "sex_condom"],
     badge: "不要跟我談流程",
-    detail: "對方邊笑邊擺手：「不要跟我談流程，我今天走感覺派。」這局不能選「戴套口交」。"
+    detail: "對方邊笑邊擺手：「不要跟我談流程，我今天走感覺派。」這局所有戴套選項一律不給過。"
   },
   {
     icon: "🎤",
-    blockedActions: ["oral_condom"],
-    badge: "今天走任性路線",
-    detail: "對方很有主見地說：「今天走任性路線，那個先不要。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_condom", "sex_condom"],
+    badge: "那層今天免了",
+    detail: "對方很有主見地說：「那層今天免了。」這局不能選任何戴套互動。"
   },
   {
     icon: "🧽",
-    blockedActions: ["oral_condom"],
-    badge: "先聊天，不要那個",
-    detail: "對方把距離拉近，小聲說：「先聊天，不要那個。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_raw", "sex_raw"],
+    badge: "不戴就別演",
+    detail: "對方直接畫線：「不戴就別演。」這局所有無套選項都直接鎖住。"
   },
   {
     icon: "🐙",
-    blockedActions: ["oral_condom"],
-    badge: "問就是不想",
-    detail: "你才剛開口，對方就秒回：「不要問，問就是不想。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_raw", "sex_raw"],
+    badge: "今天只玩有保護",
+    detail: "你才剛試探，對方就秒回：「今天只玩有保護。」這局不能選任何無套路線。"
   },
   {
     icon: "📦",
-    blockedActions: ["oral_condom"],
-    badge: "我剛剛許願了，不行",
-    detail: "對方神神祕祕地說：「我剛剛有許願，今天不走這條線。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_raw", "sex_raw"],
+    badge: "安全感擺第一",
+    detail: "對方神神祕祕地說：「安全感擺第一，沒得商量。」這局所有無套選項都不能碰。"
   },
   {
     icon: "🪄",
-    blockedActions: ["oral_condom"],
-    badge: "今天口交額度用完",
-    detail: "對方攤手聳肩：「今天口交額度用完，改天再說。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_raw", "sex_raw"],
+    badge: "今天規矩比氣氛大",
+    detail: "對方眨眼補一句：「今天規矩比氣氛大。」這局不能選任何無套互動。"
   },
   {
     icon: "🎲",
-    blockedActions: ["oral_condom"],
-    badge: "規則是我剛剛現編的",
-    detail: "對方理直氣壯地下結論：「規則是我剛剛現編的，這個今天不玩。」這局不能選「戴套口交」。"
+    blockedActions: ["oral_raw", "sex_raw"],
+    badge: "套上才有得聊",
+    detail: "對方理直氣壯地下結論：「套上才有得聊，其他免談。」這局不能選任何無套選項。"
   },
   {
     icon: "🕯️",
@@ -155,9 +155,8 @@ const ROUND_EVENT_DECK = [
   },
   {
     icon: "🛼",
-    blockedActions: ["oral_condom"],
     badge: "地板太滑",
-    detail: "地板滑到像夜店版溜冰場，連站著都像在抽卡，這局不能選「戴套口交」，而且只要真的有互動，風險再多 10%。",
+    detail: "地板滑到像夜店版溜冰場，連站著都像在抽卡，這局只要真的有互動，風險再多 10%。",
     riskBonus: 0.1
   }
 ];
@@ -241,6 +240,9 @@ function cacheDom() {
     finaleHeading: document.getElementById("finale-heading"),
     finaleBody: document.getElementById("finale-body"),
     podiumStage: document.getElementById("podium-stage"),
+    replayPanel: document.getElementById("replay-panel"),
+    replayHeading: document.getElementById("replay-heading"),
+    replayList: document.getElementById("replay-list"),
     awardsList: document.getElementById("awards-list"),
     restartBtn: document.getElementById("restart-btn"),
     toast: document.getElementById("toast")
@@ -318,12 +320,14 @@ function hydrateStoredProfile() {
 
 function renderAvatarPicker() {
   APP.dom.avatarPicker.innerHTML = "";
-  AVATARS.forEach((avatar) => {
+  AVATARS.forEach((avatar, index) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "avatar-chip";
     button.dataset.avatar = avatar;
     button.textContent = avatar;
+    button.setAttribute("aria-label", `選擇頭像 ${index + 1}：${avatar}`);
+    button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", () => {
       APP.selectedAvatar = avatar;
       highlightAvatarChip(avatar);
@@ -335,7 +339,9 @@ function renderAvatarPicker() {
 function highlightAvatarChip(avatar) {
   const chips = Array.from(APP.dom.avatarPicker.querySelectorAll(".avatar-chip"));
   chips.forEach((chip) => {
-    chip.classList.toggle("selected", chip.dataset.avatar === avatar);
+    const isSelected = chip.dataset.avatar === avatar;
+    chip.classList.toggle("selected", isSelected);
+    chip.setAttribute("aria-pressed", String(isSelected));
   });
 }
 
@@ -538,7 +544,7 @@ function schedulePlayerReconnect(message) {
   showToast(message);
 
   if (APP.playerReconnectAttempts >= PLAYER_RECONNECT_DELAYS_MS.length) {
-    fallbackToJoinScreen("跟主揪失聯太久了，先回入口重新滑進來。");
+    fallbackToJoinScreen("跟主揪失聯太久了，回入口重新滑進來吧。");
     return;
   }
   if (APP.playerReconnectTimer) {
@@ -836,7 +842,7 @@ function handleCreateRoom() {
   highlightAvatarChip(profile.avatar);
 
   if (!typedName && !existing.name) {
-    showToast("你主揪名號空著，我先幫你套上「今晚主揪」。");
+    showToast("你主揪名號空著，直接送你「今晚主揪」。");
   }
 
   destroyPeerState();
@@ -883,6 +889,7 @@ function createHostRoom(profile) {
     roomCode: APP.roomCode,
     testMode: false,
     testBotIds: [],
+    replayArchive: [],
     phase: "lobby",
     roundIndex: 0,
     roundCount: GAME_CONFIG.roundCount,
@@ -953,7 +960,7 @@ function handleJoinSubmit(event) {
     return;
   }
   if (!name) {
-    showToast("先取個有記憶點的名字吧。");
+    showToast("取個有記憶點的名字吧。");
     return;
   }
 
@@ -1089,7 +1096,7 @@ function handleHostMessage(conn, packet) {
     }
 
     if (room.phase !== "lobby") {
-      conn.send({ type: "join-rejected", reason: "這桌已經開喝了，這局先別硬擠。" });
+      conn.send({ type: "join-rejected", reason: "這桌已經開喝了，這局別硬擠。" });
       conn.close();
       return;
     }
@@ -1323,7 +1330,8 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       body: room.finale.body,
       podium: room.finale.podium,
       awards: room.finale.awards,
-      selfResult: room.finalResults[playerId]
+      selfResult: room.finalResults[playerId],
+      replayRounds: buildReplayRoundsForPlayer(room, playerId)
     };
   }
 
@@ -1367,6 +1375,28 @@ function buildPartnerView(playerId, partnerId) {
     constraints: partner.persona.constraints,
     tags
   };
+}
+
+function buildReplayRoundsForPlayer(room, playerId) {
+  return (room.replayArchive || [])
+    .map((entry) => {
+      const personal = entry.players[playerId];
+      if (!personal) {
+        return null;
+      }
+      return {
+        roundIndex: entry.roundIndex,
+        publicStats: entry.publicStats,
+        partnerName: personal.partnerName,
+        partnerAvatar: personal.partnerAvatar,
+        actionLabel: personal.actionLabel,
+        actionKey: personal.actionKey,
+        roundNotice: personal.roundNotice,
+        summary: personal.summary,
+        postState: personal.postState
+      };
+    })
+    .filter(Boolean);
 }
 
 function fallbackSummary() {
@@ -1511,7 +1541,7 @@ function renderRound(snapshot) {
   if (!round.partner) {
     APP.dom.partnerAvatar.textContent = "🪑";
     APP.dom.partnerName.textContent = "這局放空";
-    APP.dom.partnerFlirt.textContent = "「這局先讓你喘口氣，暫時沒人跟你對到。」";
+    APP.dom.partnerFlirt.textContent = "「這局讓你喘口氣，暫時沒人跟你對到。」";
     APP.dom.partnerTags.replaceChildren();
     setPartnerToolState(false, isLocked);
     renderActionButtonStates([], effectiveSubmission, true, Boolean(pendingUtility));
@@ -1603,12 +1633,12 @@ function updateSubmissionCard(submission, partner, pendingUtility, noPartner, re
   }
   if (reconnecting) {
     APP.dom.submittedActionLabel.textContent = "訊號拉回中";
-    APP.dom.submissionHint.textContent = "你跟主揪剛剛斷了一下，我正在幫你重接，先別急著亂按。";
+    APP.dom.submissionHint.textContent = "你跟主揪剛剛斷了一下，我正在幫你重接，別急著亂按。";
     return;
   }
   if (pendingUtility) {
     APP.dom.submittedActionLabel.textContent = pendingUtility.label;
-    APP.dom.submissionHint.textContent = "動作送出了，先別急著亂按。";
+    APP.dom.submissionHint.textContent = "動作送出了，別急著亂按。";
     return;
   }
   if (noPartner) {
@@ -1722,6 +1752,61 @@ function renderAwards(snapshot) {
     awardsFragment.appendChild(row);
   });
   APP.dom.awardsList.replaceChildren(awardsFragment);
+
+  if (!APP.dom.replayPanel || !APP.dom.replayHeading || !APP.dom.replayList) {
+    return;
+  }
+
+  const replayRounds = snapshot.finale.replayRounds || [];
+  APP.dom.replayPanel.classList.toggle("hidden", replayRounds.length === 0);
+  if (!replayRounds.length) {
+    APP.dom.replayList.replaceChildren();
+    return;
+  }
+
+  APP.dom.replayHeading.textContent = `${snapshot.self.name} 這晚到底怎麼演歪的`;
+  const replayFragment = document.createDocumentFragment();
+  replayRounds.forEach((entry) => {
+    const card = document.createElement("article");
+    card.className = "replay-card";
+
+    const chips = (entry.summary.chips || [])
+      .map((chip) => `<span class="summary-chip ${escapeHtml(chip.kind)}">${escapeHtml(chip.label)}</span>`)
+      .join("");
+    const notes = (entry.summary.notes || [])
+      .map((note) => `<p>${escapeHtml(note)}</p>`)
+      .join("");
+    const publicLine = (entry.publicStats || [])
+      .map((item) => `${item.label} ${item.value}`)
+      .join(" · ");
+    const resultLabel = entry.postState.detectedSelf
+      ? entry.postState.infected ? "自己知道中獎了" : "自己知道還安全"
+      : entry.postState.infected ? "已感染但還沒翻到自己" : "目前沒感染";
+
+    card.innerHTML = `
+      <div class="replay-topline">
+        <strong>第 ${entry.roundIndex} 局</strong>
+        <span>對到 ${escapeHtml(entry.partnerName)} ${escapeHtml(entry.partnerAvatar)}</span>
+      </div>
+      <div class="replay-actionline">
+        <span class="phase-pill subtle">你這局選了：${escapeHtml(entry.actionLabel)}</span>
+        ${entry.roundNotice ? `<span class="phase-pill warm">${escapeHtml(`亂入：${entry.roundNotice.badge}`)}</span>` : ""}
+      </div>
+      <p class="replay-body">${escapeHtml(entry.summary.body)}</p>
+      <div class="summary-extra">${chips}${notes}</div>
+      <div class="replay-stats">
+        <span>${escapeHtml(publicLine)}</span>
+        <strong>${escapeHtml(resultLabel)}</strong>
+      </div>
+      <div class="replay-meters">
+        <span>上頭 ${entry.postState.desire}%</span>
+        <span>慌張 ${entry.postState.anxiety}%</span>
+        <span>親密 ${entry.postState.intimacyCount} 次</span>
+      </div>
+    `;
+    replayFragment.appendChild(card);
+  });
+  APP.dom.replayList.replaceChildren(replayFragment);
 }
 
 function copyJoinLink() {
@@ -1772,7 +1857,7 @@ function startSoloTestGame() {
 
   const realGuests = Object.values(room.players).filter((player) => !player.isHost && !player.isBot);
   if (realGuests.length > 0) {
-    showToast("現在有真人在場，先別偷切成單機測試。");
+    showToast("現在有真人在場，別偷切成單機測試。");
     return;
   }
 
@@ -1801,6 +1886,7 @@ function startHostedGame() {
   room.finalResults = null;
   room.finale = null;
   room.summary = null;
+  room.replayArchive = [];
 
   activeIds.forEach((playerId) => {
     const player = room.players[playerId];
@@ -2320,8 +2406,59 @@ function resolveHostedRound() {
       { label: "到現在還沒開張的人", value: `${publicCounter.noExperiencePlayers} 人` }
     ]
   };
+  room.replayArchive.push(createReplayArchiveEntry(room, privateSummaries, room.summary.publicStats));
   room.phase = "summary";
   hostSyncAll({ immediate: true });
+}
+
+function createReplayArchiveEntry(room, privateSummaries, publicStats) {
+  const players = {};
+
+  Object.keys(room.players).forEach((playerId) => {
+    const player = room.players[playerId];
+    const partnerId = room.round?.pairMap?.[playerId] || null;
+    const partner = partnerId ? room.players[partnerId] : null;
+    const privateState = room.round?.private?.[playerId] || {};
+    const actionKey = room.round?.submissions?.[playerId] || null;
+
+    players[playerId] = {
+      partnerName: partner?.name || "這局放空",
+      partnerAvatar: partner?.avatar || "🪑",
+      actionKey,
+      actionLabel: actionKey && ACTIONS[actionKey] ? ACTIONS[actionKey].shortLabel : "放空一局",
+      roundNotice: privateState.roundNotice
+        ? {
+            icon: privateState.roundNotice.icon,
+            badge: privateState.roundNotice.badge
+          }
+        : null,
+      summary: {
+        title: privateSummaries[playerId]?.title || `第 ${room.roundIndex} 局翻牌`,
+        body: privateSummaries[playerId]?.body || "這局就這樣滑過去了。",
+        chips: (privateSummaries[playerId]?.chips || []).map((chip) => ({
+          label: chip.label,
+          kind: chip.kind
+        })),
+        notes: [...(privateSummaries[playerId]?.notes || [])]
+      },
+      postState: {
+        infected: player.isInfected,
+        detectedSelf: player.detectedSelf,
+        intimacyCount: player.intimacyCount,
+        desire: player.desire,
+        anxiety: player.anxiety
+      }
+    };
+  });
+
+  return {
+    roundIndex: room.roundIndex,
+    publicStats: publicStats.map((item) => ({
+      label: item.label,
+      value: item.value
+    })),
+    players
+  };
 }
 
 function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex) {
@@ -2341,8 +2478,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyHospital(left);
     publicStats.hospitalVisits += 1;
     leftSummary.body = left.isInfected
-      ? "你這局先衝去醫院，翻牌答案是：你真的中獎了。"
-      : "你這局先衝去醫院，翻牌答案是：你目前還安全。";
+      ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
+      : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     leftSummary.chips.push({ label: left.isInfected ? "真的中獎" : "目前安全", kind: left.isInfected ? "bad" : "good" });
     leftSummary.notes.push("醫院會讓你瞬間清醒，但回來只會更想玩。");
   }
@@ -2351,8 +2488,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyHospital(right);
     publicStats.hospitalVisits += 1;
     rightSummary.body = right.isInfected
-      ? "你這局先衝去醫院，翻牌答案是：你真的中獎了。"
-      : "你這局先衝去醫院，翻牌答案是：你目前還安全。";
+      ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
+      : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     rightSummary.chips.push({ label: right.isInfected ? "真的中獎" : "目前安全", kind: right.isInfected ? "bad" : "good" });
     rightSummary.notes.push("醫院會讓你瞬間清醒，但回來只會更想玩。");
   }
@@ -2365,7 +2502,7 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     if (leftActionKey === "refuse") {
       applyRefuse(left, right);
       leftSummary.body = `你決定跟 ${right.name} 保持距離，這局直接不接球。`;
-      leftSummary.chips.push({ label: right.isInfected ? "閃得漂亮" : "自己先撤", kind: right.isInfected ? "good" : "warn" });
+      leftSummary.chips.push({ label: right.isInfected ? "閃得漂亮" : "自己閃人", kind: right.isInfected ? "good" : "warn" });
       if (right.isInfected) {
         left.stats.correctLeaves += 1;
       }
@@ -2378,7 +2515,7 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     if (rightActionKey === "refuse") {
       applyRefuse(right, left);
       rightSummary.body = `你決定跟 ${left.name} 保持距離，這局直接不接球。`;
-      rightSummary.chips.push({ label: left.isInfected ? "閃得漂亮" : "自己先撤", kind: left.isInfected ? "good" : "warn" });
+      rightSummary.chips.push({ label: left.isInfected ? "閃得漂亮" : "自己閃人", kind: left.isInfected ? "good" : "warn" });
       if (left.isInfected) {
         right.stats.correctLeaves += 1;
       }
