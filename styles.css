@@ -358,7 +358,6 @@ select {
 
 .notice-card p,
 .plain-list li,
-.locked-card p,
 .scoreboard div,
 .summary-extra p,
 .awards-list article p {
@@ -886,28 +885,6 @@ select {
   text-shadow: 0 2px 14px rgba(90, 17, 40, 0.3);
   transform: rotate(-1.5deg);
   backdrop-filter: blur(2px);
-}
-
-.locked-card {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 16px;
-  background: rgba(226, 207, 211, 0.48);
-  border: 1px solid rgba(116, 82, 92, 0.1);
-}
-
-.locked-card span {
-  display: inline-block;
-  color: var(--faint);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.locked-card strong {
-  display: block;
-  margin: 8px 0 6px;
-  font-size: 1.05rem;
 }
 
 .summary-grid {

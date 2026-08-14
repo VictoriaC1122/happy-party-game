@@ -238,8 +238,6 @@ function cacheDom() {
     testBtn: document.getElementById("test-btn"),
     hospitalBtn: document.getElementById("hospital-btn"),
     actionButtons: document.getElementById("action-buttons"),
-    submittedActionLabel: document.getElementById("submitted-action-label"),
-    submissionHint: document.getElementById("submission-hint"),
     summaryTitle: document.getElementById("summary-title"),
     summaryBody: document.getElementById("summary-body"),
     summaryExtra: document.getElementById("summary-extra"),
@@ -1565,7 +1563,6 @@ function renderRound(snapshot) {
     renderActionButtonStates(round.availableActions, round.actionLocks || {}, effectiveSubmission, false, Boolean(pendingUtility || reconnecting));
   }
 
-  updateSubmissionCard(effectiveSubmission, round.partner, pendingUtility, !round.partner, reconnecting);
   startCountdown(round.deadlineAt, round.submissionProgress, snapshot.role === "host");
 }
 
@@ -1639,35 +1636,6 @@ function renderActionButtonStates(availableActions, actionLocks, submittedAction
       lockLabel.classList.toggle("hidden", !denialLabel);
     }
   });
-}
-
-function updateSubmissionCard(submission, partner, pendingUtility, noPartner, reconnecting = false) {
-  if (submission) {
-    APP.dom.submittedActionLabel.textContent = ACTIONS[submission].shortLabel;
-    APP.dom.submissionHint.textContent = APP.localPending.submission && !APP.playerSnapshot?.round?.submission
-      ? "你的選擇正飛去主揪那邊…"
-      : "你已鎖牌，等主揪翻牌。";
-    return;
-  }
-  if (reconnecting) {
-    APP.dom.submittedActionLabel.textContent = "訊號拉回中";
-    APP.dom.submissionHint.textContent = "你跟主揪剛剛斷了一下，我正在幫你重接，別急著亂按。";
-    return;
-  }
-  if (pendingUtility) {
-    APP.dom.submittedActionLabel.textContent = pendingUtility.label;
-    APP.dom.submissionHint.textContent = "動作送出了，別急著亂按。";
-    return;
-  }
-  if (noPartner) {
-    APP.dom.submittedActionLabel.textContent = "這局可放空";
-    APP.dom.submissionHint.textContent = "這局沒配到人，你可以發呆；想驗身還是能跑醫院。";
-    return;
-  }
-  APP.dom.submittedActionLabel.textContent = "還沒拍板";
-  APP.dom.submissionHint.textContent = partner
-    ? `${partner.roundNotice ? `亂入事件：${partner.roundNotice.detail} ` : ""}倒數跑完還沒選，遊戲就會幫你自動「換下一位」。`
-    : "這局放空就好，等其他人把戲演完。";
 }
 
 function startCountdown(deadlineAt, progress, isHost) {
@@ -2352,7 +2320,7 @@ function hostReceiveAction(playerId, actionKey) {
   const partnerId = room.round.pairMap[playerId];
   if (actionKey === "hospital") {
     room.round.submissions[playerId] = "hospital";
-    sendPrivateToast(playerId, `已鎖牌：${ACTIONS.hospital.shortLabel}`);
+    sendPrivateToast(playerId, `你選了：${ACTIONS.hospital.shortLabel}`);
     if (allRoundActionsSubmitted()) {
       resolveHostedRound();
       return;
@@ -2363,7 +2331,7 @@ function hostReceiveAction(playerId, actionKey) {
 
   if (!partnerId) {
     room.round.submissions[playerId] = "refuse";
-    sendPrivateToast(playerId, `已鎖牌：${ACTIONS.refuse.shortLabel}`);
+    sendPrivateToast(playerId, `你選了：${ACTIONS.refuse.shortLabel}`);
     hostSyncAll();
     return;
   }
@@ -2371,7 +2339,7 @@ function hostReceiveAction(playerId, actionKey) {
   const allowedActions = getAllowedActionsForPlayer(playerId);
   const finalAction = allowedActions.includes(actionKey) ? actionKey : "refuse";
   room.round.submissions[playerId] = finalAction;
-  sendPrivateToast(playerId, `已鎖牌：${ACTIONS[finalAction].shortLabel}`);
+  sendPrivateToast(playerId, `你選了：${ACTIONS[finalAction].shortLabel}`);
 
   if (allRoundActionsSubmitted()) {
     resolveHostedRound();
