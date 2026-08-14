@@ -268,13 +268,13 @@ function cacheDom() {
     roundTitle: document.getElementById("round-title"),
     timerPill: document.getElementById("timer-pill"),
     selfRolePill: document.getElementById("self-role-pill"),
-    satisfactionValue: document.getElementById("satisfaction-value"),
-    anxietyValue: document.getElementById("anxiety-value"),
+    dissatisfactionValue: document.getElementById("dissatisfaction-value"),
+    healthAnxietyValue: document.getElementById("health-anxiety-value"),
     intimacyValue: document.getElementById("intimacy-value"),
     testkitValue: document.getElementById("testkit-value"),
-    satisfactionBar: document.getElementById("satisfaction-bar"),
-    anxietyBar: document.getElementById("anxiety-bar"),
-    panicWarning: document.getElementById("panic-warning"),
+    dissatisfactionBar: document.getElementById("dissatisfaction-bar"),
+    healthAnxietyBar: document.getElementById("health-anxiety-bar"),
+    healthAnxietyWarning: document.getElementById("health-anxiety-warning"),
     partnerAvatar: document.getElementById("partner-avatar"),
     partnerName: document.getElementById("partner-name"),
     partnerFlirt: document.getElementById("partner-flirt"),
@@ -986,8 +986,8 @@ function createPlayerState(id, profile, isHost = false) {
     isBot: false,
     online: true,
     joinedAt: Date.now(),
-    satisfaction: GAME_CONFIG.startSatisfaction,
-    anxiety: GAME_CONFIG.startAnxiety,
+    dissatisfaction: GAME_CONFIG.startDissatisfaction,
+    healthAnxiety: GAME_CONFIG.startHealthAnxiety,
     intimacyCount: 0,
     testkits: 1,
     isCarrier: false,
@@ -1363,8 +1363,8 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       id: me.id,
       name: me.name,
       avatar: me.avatar,
-      satisfaction: me.satisfaction,
-      anxiety: me.anxiety,
+      dissatisfaction: me.dissatisfaction,
+      healthAnxiety: me.healthAnxiety,
       intimacyCount: me.intimacyCount,
       testkits: me.testkits,
       detectedSelf: me.detectedSelf,
@@ -1443,7 +1443,7 @@ function buildPartnerView(playerId, partnerId) {
     flirt: partner.persona.flirt,
     testedResult: privateState.testedResult,
     roundNotice: privateState.roundNotice,
-    satisfactionBonusClues: privateState.satisfactionBonusClues || 0,
+    dissatisfactionEvent: privateState.dissatisfactionEvent || null,
     constraints: partner.persona.constraints,
     tags
   };
@@ -1464,6 +1464,7 @@ function buildReplayRoundsForPlayer(room, playerId) {
         actionLabel: personal.actionLabel,
         actionKey: personal.actionKey,
         roundNotice: personal.roundNotice,
+        dissatisfactionEvent: personal.dissatisfactionEvent,
         summary: personal.summary,
         postState: personal.postState
       };
@@ -1629,42 +1630,43 @@ function renderRound(snapshot) {
   const isLocked = Boolean(effectiveSubmission || pendingUtility || reconnecting);
   APP.dom.roundTitle.textContent = `Round ${snapshot.roundIndex} / ${snapshot.roundCount}`;
   APP.dom.selfRolePill.textContent = describeRolePill(self);
-  APP.dom.satisfactionValue.textContent = `${self.satisfaction}%`;
-  APP.dom.anxietyValue.textContent = `${self.anxiety}%`;
+  APP.dom.dissatisfactionValue.textContent = `${self.dissatisfaction}%`;
+  APP.dom.healthAnxietyValue.textContent = `${self.healthAnxiety}%`;
   APP.dom.intimacyValue.textContent = String(self.intimacyCount);
   APP.dom.testkitValue.textContent = String(self.testkits);
-  APP.dom.satisfactionBar.style.width = `${self.satisfaction}%`;
-  APP.dom.anxietyBar.style.width = `${self.anxiety}%`;
-  APP.dom.panicWarning.classList.toggle("hidden", self.anxiety < GAME_CONFIG.panicThreshold);
+  APP.dom.dissatisfactionBar.style.width = `${self.dissatisfaction}%`;
+  APP.dom.healthAnxietyBar.style.width = `${self.healthAnxiety}%`;
+  const healthAnxietyBlocksChat = self.healthAnxiety >= GAME_CONFIG.healthAnxietyChatThreshold;
+  APP.dom.healthAnxietyWarning.classList.toggle("hidden", !healthAnxietyBlocksChat);
 
   if (!round.partner) {
     APP.dom.partnerAvatar.textContent = "🪑";
     APP.dom.partnerName.textContent = "這局放空";
     APP.dom.partnerFlirt.textContent = "「這局讓你喘口氣，暫時沒人跟你對到。」";
     APP.dom.partnerTags.replaceChildren();
-    setPartnerToolState(false, isLocked);
+    setPartnerToolState(false, isLocked, healthAnxietyBlocksChat);
     renderActionButtonStates([], {}, effectiveSubmission, true, Boolean(pendingUtility));
   } else {
     APP.dom.partnerAvatar.textContent = round.partner.avatar;
     APP.dom.partnerName.textContent = round.partner.name;
     APP.dom.partnerFlirt.textContent = `「${round.partner.flirt}」`;
-    renderPartnerTags(round.partner, self.anxiety);
-    setPartnerToolState(true, isLocked);
+    renderPartnerTags(round.partner, self.healthAnxiety);
+    setPartnerToolState(true, isLocked, healthAnxietyBlocksChat);
     renderActionButtonStates(round.availableActions, round.actionLocks || {}, effectiveSubmission, false, Boolean(pendingUtility || reconnecting));
   }
 
   startCountdown(round.deadlineAt, round.submissionProgress, snapshot.role === "host");
 }
 
-function setPartnerToolState(hasPartner, locked) {
-  APP.dom.chatBtn.disabled = !hasPartner || locked;
+function setPartnerToolState(hasPartner, locked, healthAnxietyBlocksChat = false) {
+  APP.dom.chatBtn.disabled = !hasPartner || locked || healthAnxietyBlocksChat;
   APP.dom.testBtn.disabled = !hasPartner || locked;
   APP.dom.hospitalBtn.disabled = locked;
 }
 
-function renderPartnerTags(partner, anxiety) {
+function renderPartnerTags(partner, healthAnxiety) {
   const fragment = document.createDocumentFragment();
-  const shouldBlur = anxiety >= GAME_CONFIG.panicThreshold;
+  const shouldBlur = healthAnxiety >= GAME_CONFIG.healthAnxietyChatThreshold;
 
   partner.tags.forEach((tag, index) => {
     const badge = document.createElement("div");
@@ -1692,11 +1694,11 @@ function renderPartnerTags(partner, anxiety) {
     eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.roundNotice.icon || "🎲")}</span><span>${escapeHtml(`亂入事件：${partner.roundNotice.badge}`)}</span>`;
     fragment.appendChild(eventBadge);
   }
-  if (partner.satisfactionBonusClues > 0) {
-    const satisfactionBadge = document.createElement("div");
-    satisfactionBadge.className = "tag tag-positive";
-    satisfactionBadge.innerHTML = `<span class="icon">💗</span><span>${escapeHtml(`滿足加碼：本局多看 ${partner.satisfactionBonusClues} 條線索`)}</span>`;
-    fragment.appendChild(satisfactionBadge);
+  if (partner.dissatisfactionEvent) {
+    const eventBadge = document.createElement("div");
+    eventBadge.className = "tag tag-risk-strong";
+    eventBadge.innerHTML = `<span class="icon">${escapeHtml(partner.dissatisfactionEvent.icon)}</span><span>${escapeHtml(partner.dissatisfactionEvent.badge)}</span>`;
+    fragment.appendChild(eventBadge);
   }
   APP.dom.partnerTags.replaceChildren(fragment);
 }
@@ -1871,6 +1873,7 @@ function renderAwards(snapshot) {
       <div class="replay-actionline">
         <span class="phase-pill subtle">你這局選了：${escapeHtml(entry.actionLabel)}</span>
         ${entry.roundNotice ? `<span class="phase-pill warm">${escapeHtml(`亂入：${entry.roundNotice.badge}`)}</span>` : ""}
+        ${entry.dissatisfactionEvent ? `<span class="phase-pill warm">${escapeHtml(`失控：${entry.dissatisfactionEvent.badge}`)}</span>` : ""}
       </div>
       <p class="replay-body">${escapeHtml(entry.summary.body)}</p>
       <div class="summary-extra">${chips}${notes}</div>
@@ -1879,8 +1882,8 @@ function renderAwards(snapshot) {
         <strong>${escapeHtml(resultLabel)}</strong>
       </div>
       <div class="replay-meters">
-        <span>滿足值 ${entry.postState.satisfaction}%</span>
-        <span>焦慮值 ${entry.postState.anxiety}%</span>
+        <span>欲求不滿值 ${entry.postState.dissatisfaction}%</span>
+        <span>焦慮得病值 ${entry.postState.healthAnxiety}%</span>
         <span>親密 ${entry.postState.intimacyCount} 次</span>
       </div>
     `;
@@ -1975,8 +1978,8 @@ function startHostedGame() {
 
   activeIds.forEach((playerId) => {
     const player = room.players[playerId];
-    player.satisfaction = GAME_CONFIG.startSatisfaction;
-    player.anxiety = GAME_CONFIG.startAnxiety;
+    player.dissatisfaction = GAME_CONFIG.startDissatisfaction;
+    player.healthAnxiety = GAME_CONFIG.startHealthAnxiety;
     player.intimacyCount = 0;
     player.testkits = 1;
     player.isCarrier = room.initialCarrierIds.includes(playerId);
@@ -2059,17 +2062,7 @@ function calculatePairingWeight(room, leftId, rightId, pairCounts, previousPartn
   if (previousPartners.get(leftId) === rightId) {
     weight *= 0.12;
   }
-  weight *= riskPairingWeight(room.players[leftId], room.players[rightId]);
-  weight *= riskPairingWeight(room.players[rightId], room.players[leftId]);
   return Math.max(0.01, weight);
-}
-
-function riskPairingWeight(player, partner) {
-  if (!player || !partner?.isInfected) {
-    return 1;
-  }
-  const riskTilt = (player.anxiety - player.satisfaction) / 100;
-  return clamp(1 + riskTilt * GAME_CONFIG.riskPairingStrength, 0.35, 1.65);
 }
 
 function pickWeightedPlayer(candidates) {
@@ -2114,6 +2107,11 @@ function startHostRound() {
     private: privateMap,
     resolved: false
   };
+  Object.entries(privateMap).forEach(([playerId, privateState]) => {
+    if (privateState.forcedAction) {
+      room.round.submissions[playerId] = privateState.forcedAction;
+    }
+  });
   room.phase = "round";
   room.summary = null;
   clearTestBotTimers();
@@ -2175,8 +2173,8 @@ function chooseSoloTestAction(playerId) {
   const visibleSafety = partnerView.tags.filter((tag) => !tag.hidden && tag.color === "positive").length;
   const testedDelta = partnerView.testedResult ? (partnerView.testedResult.infected ? -3 : 2) : 0;
   const noticeDelta = partnerView.roundNotice ? -1 : 0;
-  const nerve = visibleRisk - visibleSafety - testedDelta - noticeDelta + Math.floor(player.anxiety / 18);
-  const heat = (100 - player.satisfaction) - Math.floor(player.anxiety / 2) - (visibleRisk * 7) + (visibleSafety * 5) + (testedDelta * 4);
+  const nerve = visibleRisk - visibleSafety - testedDelta - noticeDelta + Math.floor(player.healthAnxiety / 18);
+  const heat = player.dissatisfaction - Math.floor(player.healthAnxiety / 2) - (visibleRisk * 7) + (visibleSafety * 5) + (testedDelta * 4);
 
   if (nerve >= 4 && Math.random() < 0.45) {
     return "hospital";
@@ -2211,7 +2209,9 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
     return {
       hiddenIndices: [],
       revealedIndices: [],
-      satisfactionBonusClues: 0,
+      dissatisfactionEvent: null,
+      forcedAction: null,
+      selfBlockedActions: [],
       testedResult: null,
       blockedActions: restriction.blockedActions.slice(),
       roundNotice: restriction.roundNotice,
@@ -2222,32 +2222,68 @@ function createPrivateRoundState(playerId, partnerId, restriction = { blockedAct
 
   const player = APP.hostRoom.players[playerId];
   const partner = APP.hostRoom.players[partnerId];
-  const hiddenIndices = [];
+  const hiddenIndices = new Set();
   partner.persona.tags.forEach((tag, index) => {
     if (Math.random() < tag.hiddenChance) {
-      hiddenIndices.push(index);
+      hiddenIndices.add(index);
     }
   });
 
-  if (hiddenIndices.length === partner.persona.tags.length && hiddenIndices.length > 0) {
-    hiddenIndices.pop();
+  if (hiddenIndices.size === partner.persona.tags.length && hiddenIndices.size > 0) {
+    hiddenIndices.delete(hiddenIndices.values().next().value);
   }
 
-  const satisfactionBonusClues = Math.min(
-    hiddenIndices.length,
-    Math.floor(player.satisfaction / GAME_CONFIG.satisfactionClueStep)
+  const visibleIndices = partner.persona.tags
+    .map((_, index) => index)
+    .filter((index) => !hiddenIndices.has(index));
+  const extraHiddenCount = Math.min(
+    visibleIndices.length,
+    Math.floor(player.healthAnxiety / GAME_CONFIG.healthAnxietyClueStep)
   );
-  const adjustedHiddenIndices = shuffle(hiddenIndices).slice(satisfactionBonusClues);
+  shuffle(visibleIndices).slice(0, extraHiddenCount).forEach((index) => hiddenIndices.add(index));
+  const dissatisfactionEvent = createDissatisfactionEvent(player);
 
   return {
-    hiddenIndices: adjustedHiddenIndices,
+    hiddenIndices: [...hiddenIndices],
     revealedIndices: [],
-    satisfactionBonusClues,
+    dissatisfactionEvent,
+    forcedAction: dissatisfactionEvent?.type === "force_raw_sex" ? "sex_raw" : null,
+    selfBlockedActions: dissatisfactionEvent?.type === "reject_condom"
+      ? ["oral_condom", "sex_condom"]
+      : [],
     testedResult: null,
     blockedActions: restriction.blockedActions.slice(),
     roundNotice: restriction.roundNotice,
     riskMultiplier: restriction.riskMultiplier,
     riskBonus: restriction.riskBonus
+  };
+}
+
+function createDissatisfactionEvent(player) {
+  const value = player?.dissatisfaction || 0;
+  if (value < GAME_CONFIG.dissatisfactionEventThreshold) {
+    return null;
+  }
+  const progress = (value - GAME_CONFIG.dissatisfactionEventThreshold)
+    / (100 - GAME_CONFIG.dissatisfactionEventThreshold);
+  const chance = GAME_CONFIG.dissatisfactionEventBaseChance
+    + progress * (GAME_CONFIG.dissatisfactionEventMaxChance - GAME_CONFIG.dissatisfactionEventBaseChance);
+  if (Math.random() >= chance) {
+    return null;
+  }
+  if (Math.random() < 0.5) {
+    return {
+      type: "force_raw_sex",
+      icon: "🔥",
+      badge: "沒得選，我就是要做",
+      detail: "欲求不滿直接接管這一局，所有選項作廢，無條件套用無套性交。"
+    };
+  }
+  return {
+    type: "reject_condom",
+    icon: "🙅",
+    badge: "你不想",
+    detail: "你現在就是不想戴，這局的戴套口交和戴套性交全部上鎖。"
   };
 }
 
@@ -2314,6 +2350,13 @@ function getActionLocksForPlayer(playerId) {
 
   const constraints = room.players[partnerId].persona.constraints;
   const privateState = room.round.private[playerId];
+  if (privateState?.forcedAction === "sex_raw") {
+    return Object.fromEntries(
+      GAME_CONFIG.actionOrder
+        .filter((actionKey) => actionKey !== "sex_raw")
+        .map((actionKey) => [actionKey, "沒得選"])
+    );
+  }
   const locks = {};
   const lockActions = (actionKeys, label) => {
     actionKeys.forEach((actionKey) => {
@@ -2339,6 +2382,9 @@ function getActionLocksForPlayer(playerId) {
     privateState?.blockedActions || [],
     privateState?.roundNotice?.lockLabel || "他不給"
   );
+  (privateState?.selfBlockedActions || []).forEach((actionKey) => {
+    locks[actionKey] = "你不想";
+  });
 
   return locks;
 }
@@ -2377,6 +2423,11 @@ function hostRevealTag(playerId) {
     return;
   }
   if (room.round.submissions[playerId]) {
+    return;
+  }
+
+  if (room.players[playerId].healthAnxiety >= GAME_CONFIG.healthAnxietyChatThreshold) {
+    sendPrivateToast(playerId, "你焦慮程度太高了，無法好好聊天得到對方的資訊");
     return;
   }
 
@@ -2528,7 +2579,7 @@ function resolveHostedRound() {
             ? "你這局雖然放空，還是跑去醫院驗了一下，結果是你真的中獎了。"
             : "你這局雖然放空，還是跑去醫院驗了一下，結果目前還安全。",
           chips: [{ label: player.isInfected ? "真的中獎" : "目前安全", kind: player.isInfected ? "bad" : "good" }],
-          notes: ["醫院讓焦慮值瞬間歸零，但今晚的滿足值也會往下掉。"]
+          notes: ["醫院讓焦慮得病值歸零，但欲求不滿值會往上跑。"]
         };
         return;
       }
@@ -2604,6 +2655,13 @@ function createReplayArchiveEntry(room, privateSummaries, publicStats) {
             badge: privateState.roundNotice.badge
           }
         : null,
+      dissatisfactionEvent: privateState.dissatisfactionEvent
+        ? {
+            icon: privateState.dissatisfactionEvent.icon,
+            badge: privateState.dissatisfactionEvent.badge,
+            type: privateState.dissatisfactionEvent.type
+          }
+        : null,
       summary: {
         title: privateSummaries[playerId]?.title || `第 ${room.roundIndex} 局翻牌`,
         body: privateSummaries[playerId]?.body || "這局就這樣滑過去了。",
@@ -2617,8 +2675,8 @@ function createReplayArchiveEntry(room, privateSummaries, publicStats) {
         infected: player.isInfected,
         detectedSelf: player.detectedSelf,
         intimacyCount: player.intimacyCount,
-        satisfaction: player.satisfaction,
-        anxiety: player.anxiety
+        dissatisfaction: player.dissatisfaction,
+        healthAnxiety: player.healthAnxiety
       }
     };
   });
@@ -2645,30 +2703,34 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     hospitalVisits: 0,
     forceMajeureSurges: 0
   };
+  const leftPrivate = room.round.private[leftId] || {};
+  const rightPrivate = room.round.private[rightId] || {};
+  const forcedRawSex = leftPrivate.forcedAction === "sex_raw" || rightPrivate.forcedAction === "sex_raw";
 
-  if (leftActionKey === "hospital") {
+  if (!forcedRawSex && leftActionKey === "hospital") {
     applyHospital(left);
     publicStats.hospitalVisits += 1;
     leftSummary.body = left.isInfected
       ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
       : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     leftSummary.chips.push({ label: left.isInfected ? "真的中獎" : "目前安全", kind: left.isInfected ? "bad" : "good" });
-    leftSummary.notes.push("醫院讓焦慮值瞬間歸零，但今晚的滿足值也會往下掉。");
+    leftSummary.notes.push("醫院讓焦慮得病值歸零，但欲求不滿值會往上跑。");
   }
 
-  if (rightActionKey === "hospital") {
+  if (!forcedRawSex && rightActionKey === "hospital") {
     applyHospital(right);
     publicStats.hospitalVisits += 1;
     rightSummary.body = right.isInfected
       ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
       : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     rightSummary.chips.push({ label: right.isInfected ? "真的中獎" : "目前安全", kind: right.isInfected ? "bad" : "good" });
-    rightSummary.notes.push("醫院讓焦慮值瞬間歸零，但今晚的滿足值也會往下掉。");
+    rightSummary.notes.push("醫院讓焦慮得病值歸零，但欲求不滿值會往上跑。");
   }
 
-  const leftIntimacy = isIntimacyAction(leftActionKey);
-  const rightIntimacy = isIntimacyAction(rightActionKey);
-  const blocked = leftActionKey === "hospital" || rightActionKey === "hospital" || leftActionKey === "refuse" || rightActionKey === "refuse";
+  const leftIntimacy = forcedRawSex || isIntimacyAction(leftActionKey);
+  const rightIntimacy = forcedRawSex || isIntimacyAction(rightActionKey);
+  const blocked = !forcedRawSex
+    && (leftActionKey === "hospital" || rightActionKey === "hospital" || leftActionKey === "refuse" || rightActionKey === "refuse");
 
   if (blocked) {
     if (leftActionKey === "refuse") {
@@ -2710,7 +2772,7 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
       roundNotice: pairEffect.roundNotice || null
     };
     const forceMajeureRisk = riskContext.riskMultiplier > 1 || riskContext.riskBonus > 0;
-    const resolvedActionKey = resolveSharedAction(leftActionKey, rightActionKey);
+    const resolvedActionKey = forcedRawSex ? "sex_raw" : resolveSharedAction(leftActionKey, rightActionKey);
     const resolvedAction = ACTIONS[resolvedActionKey];
     publicStats.intimateEvents += 1;
     if (!resolvedAction.condom) {
@@ -2731,10 +2793,17 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyIntimacy(left, resolvedActionKey, leftPartnerWasInfected);
     applyIntimacy(right, resolvedActionKey, rightPartnerWasInfected);
 
-    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。滿足感升了一點，焦慮也跟著往上跑。`;
-    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。滿足感升了一點，焦慮也跟著往上跑。`;
+    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。欲求不滿降了一點，焦慮得病值也跟著往上跑。`;
+    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。欲求不滿降了一點，焦慮得病值也跟著往上跑。`;
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
+
+    if (forcedRawSex) {
+      leftSummary.chips.push({ label: "沒得選，我就是要做", kind: "warn" });
+      rightSummary.chips.push({ label: "沒得選，我就是要做", kind: "warn" });
+      leftSummary.notes.push("欲求不滿事件蓋過所有人的選項，這局無條件套用無套性交。");
+      rightSummary.notes.push("欲求不滿事件蓋過所有人的選項，這局無條件套用無套性交。");
+    }
 
     if (forceMajeureRisk && riskContext.roundNotice) {
       leftSummary.chips.push({ label: "亂入加碼風險", kind: "warn" });
@@ -2776,28 +2845,34 @@ function resolveSharedAction(leftActionKey, rightActionKey) {
 }
 
 function applyHospital(player) {
-  player.satisfaction = clamp(player.satisfaction - GAME_CONFIG.hospitalSatisfactionLoss, 0, 100);
-  player.anxiety = 0;
+  player.dissatisfaction = clamp(
+    player.dissatisfaction + GAME_CONFIG.hospitalDissatisfactionGain,
+    0,
+    100
+  );
+  player.healthAnxiety = 0;
   player.detectedSelf = true;
   player.detectedInfected = player.isInfected;
   player.stats.hospitals += 1;
 }
 
 function applyRefuse(player) {
-  player.satisfaction = clamp(player.satisfaction - GAME_CONFIG.refuseSatisfactionLoss, 0, 100);
-  player.anxiety = finalizeAnxiety(player.anxiety);
+  player.dissatisfaction = finalizeDissatisfaction(
+    player.dissatisfaction + GAME_CONFIG.refuseDissatisfactionGain
+  );
 }
 
 function applyFailedAttempt(player) {
-  player.satisfaction = clamp(player.satisfaction - GAME_CONFIG.failedAttemptSatisfactionLoss, 0, 100);
-  player.anxiety = finalizeAnxiety(player.anxiety + GAME_CONFIG.failedAttemptAnxietyGain);
+  player.dissatisfaction = finalizeDissatisfaction(
+    player.dissatisfaction + GAME_CONFIG.failedAttemptDissatisfactionGain
+  );
   player.stats.failedAttempts += 1;
 }
 
 function applyIntimacy(player, actionKey, partnerWasInfected) {
   const action = ACTIONS[actionKey];
-  player.satisfaction = clamp(player.satisfaction + action.satisfactionGain, 0, 100);
-  player.anxiety = finalizeAnxiety(player.anxiety + action.anxietyGain);
+  player.dissatisfaction = clamp(player.dissatisfaction - action.dissatisfactionRelief, 0, 100);
+  player.healthAnxiety = finalizeHealthAnxiety(player.healthAnxiety + action.healthAnxietyGain);
   player.intimacyCount += 1;
   player.stats.successfulIntimacies += 1;
   if (!action.condom) {
@@ -2810,8 +2885,13 @@ function applyIntimacy(player, actionKey, partnerWasInfected) {
   });
 }
 
-function finalizeAnxiety(value) {
+function finalizeHealthAnxiety(value) {
   const extra = value > 20 ? 2 : 0;
+  return clamp(value + extra, 0, 100);
+}
+
+function finalizeDissatisfaction(value) {
+  const extra = value > 50 ? 4 : 0;
   return clamp(value + extra, 0, 100);
 }
 

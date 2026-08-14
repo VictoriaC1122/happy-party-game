@@ -810,15 +810,15 @@ select {
   line-height: 1.55;
 }
 
-.satisfaction-fill {
+.dissatisfaction-fill {
   background: linear-gradient(90deg, #d7b8c0, #b98693, #8f5c6a);
 }
 
-.anxiety-fill {
+.health-anxiety-fill {
   background: linear-gradient(90deg, #c6d3cf, #93aaa5, #66877f);
 }
 
-.panic-warning {
+.health-anxiety-warning {
   margin: 14px 0 0;
   padding: 12px 14px;
   border-radius: 14px;
@@ -827,7 +827,7 @@ select {
   color: #80505e;
 }
 
-.panic-warning.hidden {
+.health-anxiety-warning.hidden {
   display: none;
 }
 

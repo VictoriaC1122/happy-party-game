@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260814o">
-  <script defer src="./data.js?v=20260814g"></script>
-  <script defer src="./app.js?v=20260814p"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260814p">
+  <script defer src="./data.js?v=20260814h"></script>
+  <script defer src="./app.js?v=20260814q"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -167,8 +167,8 @@
             <li>每 Round 隨機兩兩配對，每人只有 1 次偷驗機會。</li>
             <li>感染後還能繼續傳下去，不會提早出局。</li>
             <li>每局都可能有無厘頭亂入，讓風險突然往上飆。</li>
-            <li>焦慮值越高，越容易在下一局撞上高風險對象；80% 起線索會看花。</li>
-            <li>滿足值越高，下一局越不容易撞上高風險對象，而且每局能多看線索。</li>
+            <li>欲求不滿值 25% 起會抽失控事件，越高越可能抽到「沒得選，我就是要做」或「你不想」。</li>
+            <li>焦慮得病值每 25% 多遮一條線索；80% 起連聊天套話都做不到。</li>
             <li>玩到最後如果一次親密互動都沒有，遊戲直接判你空手出局。</li>
             <li>如果最後還有人健康，有親密經驗的人會按生存分搶 6 個勝利席次。</li>
             <li>生存分：健康 +120、親密 +4、戴套 +7、驚險避過 +10、正確換人 +7、偷驗 +5、醫院最多 +6；無套 -9、傳播 -10。</li>
@@ -243,8 +243,10 @@
             <li>全場跑 10 Round，每 Round 都會重新隨機兩兩配對。</li>
             <li>每局都可能被莫名其妙的亂入事件搞到風險暴衝。</li>
             <li>每人整晚只有 1 次偷驗對方的機會，醫院則想去幾次都行。</li>
-            <li>焦慮值越高，下一局撞上高風險對象的機率越高；80% 起線索會開始看花。</li>
-            <li>滿足值越高，下一局撞上高風險對象的機率越低，而且每局能看到更多線索。</li>
+            <li>欲求不滿值 25% 起進入失控抽選，最高有 70% 機率觸發。</li>
+            <li>抽到「沒得選，我就是要做」，會強制套用無套性交。</li>
+            <li>另一種失控是「你不想」：戴套口交與戴套性交會被全部鎖住。</li>
+            <li>焦慮得病值每 25% 多遮一條線索；80% 起無法再靠聊天取得資訊。</li>
             <li>每局結束後，要等主揪拍板才會進下一局。</li>
           </ul>
         </article>
@@ -276,16 +278,16 @@
 
       <div class="stats-grid">
         <article class="stat-card">
-          <span>滿足值</span>
-          <strong id="satisfaction-value">45%</strong>
-          <div class="meter"><div id="satisfaction-bar" class="meter-fill satisfaction-fill"></div></div>
-          <small class="stat-hint">越滿足，線索越多；下一局遇到高風險對象的機率也越低。</small>
+          <span>欲求不滿值</span>
+          <strong id="dissatisfaction-value">0%</strong>
+          <div class="meter"><div id="dissatisfaction-bar" class="meter-fill dissatisfaction-fill"></div></div>
+          <small class="stat-hint">25% 起開始抽失控事件；越高越容易強制無套性交或鎖住兩個戴套選項。</small>
         </article>
         <article class="stat-card">
-          <span>焦慮值</span>
-          <strong id="anxiety-value">0%</strong>
-          <div class="meter"><div id="anxiety-bar" class="meter-fill anxiety-fill"></div></div>
-          <small class="stat-hint">遇到高風險的人的機率會升高；80% 起，眼前線索會開始看花。</small>
+          <span>焦慮得病值</span>
+          <strong id="health-anxiety-value">0%</strong>
+          <div class="meter"><div id="health-anxiety-bar" class="meter-fill health-anxiety-fill"></div></div>
+          <small class="stat-hint">每 25% 多遮一條線索；80% 起，連聊天都問不出對方資訊。</small>
         </article>
         <article class="stat-card mini">
           <span>親密次數</span>
@@ -297,7 +299,7 @@
         </article>
       </div>
 
-      <div id="panic-warning" class="panic-warning hidden">焦慮值爆到眼花，線索開始糊成一坨。</div>
+      <div id="health-anxiety-warning" class="health-anxiety-warning hidden">你焦慮程度太高了，無法好好聊天得到對方的資訊</div>
 
       <div class="battle-grid">
         <article class="partner-card">
