@@ -1043,6 +1043,21 @@ select {
   font-size: 1rem;
 }
 
+.replay-partner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 11px;
+  border: 1px solid rgba(159, 102, 117, 0.18);
+  border-radius: 999px;
+  background: rgba(218, 192, 198, 0.36);
+  color: #79505c !important;
+}
+
+.replay-partner b {
+  color: var(--text);
+}
+
 .replay-topline span,
 .replay-stats span,
 .replay-meters span {

@@ -1747,7 +1747,7 @@ function renderAwards(snapshot) {
     return;
   }
 
-  APP.dom.replayHeading.textContent = `${snapshot.self.name} 這晚到底怎麼演歪的`;
+  APP.dom.replayHeading.textContent = `${snapshot.self.name} 的 ${replayRounds.length} 局往來復盤`;
   const replayFragment = document.createDocumentFragment();
   replayRounds.forEach((entry) => {
     const card = document.createElement("article");
@@ -1769,7 +1769,7 @@ function renderAwards(snapshot) {
     card.innerHTML = `
       <div class="replay-topline">
         <strong>第 ${entry.roundIndex} 局</strong>
-        <span>對到 ${escapeHtml(entry.partnerName)} ${escapeHtml(entry.partnerAvatar)}</span>
+        <span class="replay-partner">往來對象：${escapeHtml(entry.partnerAvatar)} <b>${escapeHtml(entry.partnerName)}</b></span>
       </div>
       <div class="replay-actionline">
         <span class="phase-pill subtle">你這局選了：${escapeHtml(entry.actionLabel)}</span>
