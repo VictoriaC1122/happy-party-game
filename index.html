@@ -7,7 +7,7 @@
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
   <link rel="stylesheet" href="./styles.css?v=20260815c">
   <script defer src="./data.js?v=20260815b"></script>
-  <script defer src="./app.js?v=20260815e"></script>
+  <script defer src="./app.js?v=20260815f"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -19,7 +19,7 @@
         <p class="eyebrow">今晚鬧場特別版</p>
         <h1>快樂酒局派對遊戲</h1>
         <p class="hero-copy">
-          40 人同桌跑滿 10 Round，每回合隨機兩兩配對。6 位初始帶原者藏在人群裡，感染後還能繼續擴散；至少有過一次親密互動，才有資格搶最後的勝利。
+          10 個晚上，40 個人一直換桌。6 位帶原者混在人群裡，感染一路往下傳；整晚都沒親密互動，連頒獎台都摸不到。
         </p>
       </div>
       <div class="hero-meta">
@@ -30,45 +30,45 @@
     <section id="test-lab-panel" class="panel test-lab hidden">
       <div class="panel-head compact-head">
         <div>
-          <p class="eyebrow">單機測試台</p>
-          <h2>一支手機也能整桌彩排</h2>
+          <p class="eyebrow">自己偷跑</p>
+          <h2>今天我一個人包桌</h2>
         </div>
-        <span id="test-lab-pill" class="phase-pill subtle">目前主揪視角</span>
+        <span id="test-lab-pill" class="phase-pill subtle">坐在主揪位</span>
       </div>
       <div class="test-lab-grid">
         <article class="notice-card">
-          <h3>切誰的畫面</h3>
+          <h3>換個人玩</h3>
           <label class="field">
-            <span>現在想偷看誰</span>
+            <span>今晚當誰</span>
             <select id="test-view-select"></select>
           </label>
           <div class="actions-row">
-            <button id="test-host-view-btn" class="secondary-btn">回主揪視角</button>
-            <button id="test-carrier-btn" class="carrier-test-btn">模擬帶原者視角</button>
+            <button id="test-host-view-btn" class="secondary-btn">坐回主揪位</button>
+            <button id="test-carrier-btn" class="carrier-test-btn">偷看帶原者</button>
             <button id="test-advance-btn" class="primary-btn hidden">下一局，走起</button>
           </div>
-          <p id="test-lab-hint" class="test-lab-hint">陪測分身會自己跑流程；你切到誰，現在看到的就是誰的畫面。</p>
+          <p id="test-lab-hint" class="test-lab-hint">分身會自己出牌，挑一個直接接手。</p>
           <article id="test-carrier-panel" class="test-carrier-panel hidden">
             <div class="carrier-test-head">
               <div>
-                <p class="eyebrow">模擬帶原者測試畫面</p>
+                <p class="eyebrow">帶原者偷看區</p>
                 <h3><span id="test-carrier-avatar">🦠</span> <span id="test-carrier-name">還在抽人</span></h3>
               </div>
-              <span class="phase-pill warm">主揪透視限定</span>
+              <span class="phase-pill warm">只有主揪看得到</span>
             </div>
-            <p class="carrier-test-copy">正式玩家仍只會看到「感染狀態：未知」；這張面板只給單機測試檢查帶原者流程。</p>
+            <p class="carrier-test-copy">放心，正式開桌不會露餡。</p>
             <div class="carrier-test-stats">
-              <div><span>測試身分</span><strong>初始帶原者</strong></div>
-              <div><span>目前狀態</span><strong id="test-carrier-infection">已感染</strong></div>
+              <div><span>今晚身分</span><strong>初始帶原者</strong></div>
+              <div><span>身上狀況</span><strong id="test-carrier-infection">已感染</strong></div>
               <div><span>已傳播</span><strong id="test-carrier-transmissions">0 次</strong></div>
               <div><span>親密互動</span><strong id="test-carrier-intimacy">0 次</strong></div>
             </div>
-            <p class="carrier-test-mission">陣營任務：讓所有有過親密互動的人在終局感染，6 位初始帶原者就一起站上頒獎台。</p>
+            <p class="carrier-test-mission">把有下場的人全送上感染名單，6 位帶原者就一起登台。</p>
           </article>
         </article>
 
         <article class="notice-card test-join-card">
-          <h3>加入連結 QR</h3>
+          <h3>找人進場</h3>
           <div class="info-pair">
             <span>房號</span>
             <strong id="test-lab-room-code">------</strong>
@@ -79,7 +79,7 @@
           </div>
           <div class="qr-wrap mini-qr-wrap">
             <div id="test-qr-code"></div>
-            <p>掃這張也能直接滑進來</p>
+            <p>另一支手機掃這張，直接上桌。</p>
           </div>
           <div class="actions-row">
             <button id="test-lab-copy-btn" class="ghost-btn">複製加入連結</button>
@@ -155,7 +155,7 @@
         <article class="mode-card">
           <p class="mode-icon">🎤</p>
           <h3>我是今晚主揪</h3>
-          <p>開房、亮掃碼圖、等大家進場，抓準時機一鍵把全場丟進修羅場。</p>
+          <p>拿房號和 QR Code 把人抓進來，人齊就按下去。</p>
           <label class="field">
             <span>主揪稱號</span>
             <input id="host-name-input" type="text" maxlength="18" placeholder="大家今晚要怎麼叫你" autocomplete="off">
@@ -165,7 +165,7 @@
         <article class="mode-card">
           <p class="mode-icon">📱</p>
           <h3>我是來鬧的玩家</h3>
-          <p>輸入房號或直接掃碼滑進來，取個綽號就等主揪發車。</p>
+          <p>房號一打、綽號一報，名字直接上牆。</p>
           <button id="goto-join-btn" class="secondary-btn">手動輸房號</button>
         </article>
         <article class="mode-card">
@@ -174,17 +174,17 @@
           <ul class="plain-list compact">
             <li>最多 40 人，整晚跑滿 10 Round。</li>
             <li>開局暗抽 6 位帶原者，感染狀態不公開。</li>
-            <li>6 位帶原者第 1 局就會收到自己的陣營身分，其他人看不到。</li>
+            <li>第 1 局一開，6 位帶原者會私下收到身分。</li>
             <li>每 Round 隨機兩兩配對，每人只有 1 次偷驗機會。</li>
-            <li>每局只有 45 秒，時間到還沒選，系統就直接幫你「換一個」。</li>
+            <li>每局 45 秒，鐘響還沒選，直接算「換一個」。</li>
             <li>感染後還能繼續傳下去，不會提早出局。</li>
             <li>第 1 局不鬧事；第 2 局起才會抽無厘頭亂入，讓風險突然往上飆。</li>
             <li>抽到「對方偷偷戳破套子」，戴套口交與戴套性交會在翻牌時改判成對應的無套行為。</li>
             <li>第 2 局起，欲求不滿值 25% 才會抽失控事件；越高越可能抽到「沒得選，我就是要做」或「你不想」。</li>
-            <li>帶原者成功無套性交 2 次後，對方的戴套選項會多 25% 上鎖機率；之後每次 +15%，最高 70%。</li>
+            <li>帶原者無套性交成功 2 次，鎖套 25%；之後每次 +15%，最高 70%。</li>
             <li>焦慮得病值每 25% 多遮一條線索；80% 起連聊天套話都做不到。</li>
-            <li>玩到最後如果一次親密互動都沒有，遊戲直接判你空手出局。</li>
-            <li>如果最後還有人健康，有親密經驗的人會按生存分搶 6 個勝利席次。</li>
+            <li>整晚 0 次親密互動，直接空手出局。</li>
+            <li>終局還有人健康，就按生存分搶 6 張椅子。</li>
             <li>生存分：健康 +120、親密 +4、戴套 +7、驚險避過 +10、正確換人 +7、偷驗 +5、醫院最多 +6；無套 -9、傳播 -10。</li>
             <li>0 次親密的人不算進感染判定；有下場的人如果全中標，開局那 6 位帶原者直接包下頒獎台。</li>
           </ul>
@@ -244,7 +244,7 @@
           </div>
           <div class="actions-row" id="host-controls">
             <button id="copy-link-btn" class="secondary-btn">複製進場連結</button>
-            <button id="solo-test-btn" class="ghost-btn">單機測一把</button>
+            <button id="solo-test-btn" class="ghost-btn">叫 7 個分身</button>
             <button id="start-game-btn" class="primary-btn" disabled>人齊就開喝</button>
           </div>
         </article>
@@ -254,14 +254,14 @@
           <ul class="plain-list compact">
             <li>12 到 40 人最熱鬧，8 人是最低開桌門檻。</li>
             <li>主揪一按開始，遊戲就會暗抽 6 位帶原者，身分全程藏好。</li>
-            <li>帶原者第 1 局就知道自己的身分，任務是別聲張，盡量在遊戲裡促成無套性交。</li>
+            <li>第 1 局一開，帶原者會私下收到任務：別露餡，多拚幾次無套性交。</li>
             <li>全場跑 10 Round，每 Round 都會重新隨機兩兩配對。</li>
             <li>每局 45 秒，倒數歸零還沒出牌，就默認「換一個」。</li>
             <li>第 1 局平安下莊；第 2 局起才可能被莫名其妙的亂入事件搞到風險暴衝。</li>
             <li>「對方偷偷戳破套子」會把戴套口交、戴套性交改判成對應的無套行為。</li>
             <li>每人整晚只有 1 次偷驗對方的機會，醫院則想去幾次都行。</li>
             <li>第 2 局起，欲求不滿值 25% 才進入失控抽選，最高有 70% 機率觸發。</li>
-            <li>帶原者無套性交成功 2 次後，遇到他的人會從 25% 起抽戴套選項上鎖，最高 70%。</li>
+            <li>帶原者無套性交成功 2 次，遇到他的人開始抽 25% 鎖套，最高 70%。</li>
             <li>抽到「沒得選，我就是要做」，會強制套用無套性交。</li>
             <li>另一種失控是「你不想」：戴套口交與戴套性交會被全部鎖住。</li>
             <li>焦慮得病值每 25% 多遮一條線索；80% 起無法再靠聊天取得資訊。</li>
@@ -275,7 +275,7 @@
           <div>
             <p class="eyebrow">大螢幕玩家牆</p>
             <h3><span id="player-count-display">0</span> 人已上線</h3>
-            <p class="player-wall-hint">掃碼進場後，你的名字會直接跳上這面牆。</p>
+            <p class="player-wall-hint">誰進房，誰上牆。</p>
           </div>
         </div>
         <div id="player-list" class="player-list" aria-live="polite"></div>
@@ -296,8 +296,8 @@
 
       <div id="carrier-mission-banner" class="carrier-mission-banner hidden">
         <div>
-          <span>🦠 你的隱藏陣營</span>
-          <strong>你是初始帶原者，遊戲裡盡量促成無套性交</strong>
+          <span>🦠 遊戲陣營：帶原者</span>
+          <strong>別露餡，多拚幾次無套性交</strong>
         </div>
         <span id="carrier-mission-progress" class="carrier-mission-progress">已成功 0 次 · 再 2 次開始加壓</span>
       </div>
@@ -307,13 +307,13 @@
           <span>欲求不滿值</span>
           <strong id="dissatisfaction-value">0%</strong>
           <div class="meter"><div id="dissatisfaction-bar" class="meter-fill dissatisfaction-fill"></div></div>
-          <small class="stat-hint">第 2 局起，25% 才開始抽失控事件；越高越容易強制無套性交或鎖住兩個戴套選項。</small>
+          <small class="stat-hint">第 2 局起，超過 25% 就可能失控。越高，越容易強制無套或不想戴。</small>
         </article>
         <article class="stat-card">
           <span>焦慮得病值</span>
           <strong id="health-anxiety-value">0%</strong>
           <div class="meter"><div id="health-anxiety-bar" class="meter-fill health-anxiety-fill"></div></div>
-          <small class="stat-hint">每 25% 多遮一條線索；80% 起，連聊天都問不出對方資訊。</small>
+          <small class="stat-hint">每多 25%，少看一條線索；衝到 80%，連話都套不出來。</small>
         </article>
         <article class="stat-card mini">
           <span>親密次數</span>
@@ -392,7 +392,7 @@
       </div>
       <article class="notice-card finale-banner">
         <h3 id="finale-heading">全場真相大白</h3>
-        <p id="finale-body">主揪正在整理今晚誰飛天、誰翻車。</p>
+        <p id="finale-body">獎牌還在飛過來。</p>
       </article>
       <div id="podium-stage" class="podium-stage"></div>
       <article id="replay-panel" class="panel inset-panel hidden">
@@ -425,8 +425,8 @@
       <div id="event-modal-icon" class="event-modal-icon" aria-hidden="true">🎲</div>
       <p id="event-modal-kicker" class="eyebrow">本局強制事件</p>
       <h2 id="event-modal-title">今晚突然有事</h2>
-      <p id="event-modal-body">這局的玩法被現場事件改掉了。</p>
-      <button id="event-modal-close" class="primary-btn" type="button">我知道了，繼續玩</button>
+      <p id="event-modal-body">今晚突然歪樓，這局照新規矩走。</p>
+      <button id="event-modal-close" class="primary-btn" type="button">好啦，繼續</button>
     </article>
   </div>
 

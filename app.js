@@ -804,12 +804,12 @@ function activateCarrierTestView() {
   const viewerId = getHostViewPlayerId();
   const carrier = findNextCarrierTestPlayer(room, viewerId, APP.testCarrierPreviewActive);
   if (!carrier) {
-    showToast("帶原者還沒抽出來，等開局再按一次。");
+    showToast("帶原者還沒出爐，開局再來偷看。");
     return;
   }
   APP.testCarrierPreviewActive = true;
   setTestView(carrier.id, { keepCarrierPreview: true });
-  showToast(`現在透視 ${carrier.name} 的帶原者視角。`);
+  showToast(`抓到 ${carrier.name}，看看他怎麼玩。`);
 }
 
 function syncTestLab() {
@@ -843,24 +843,24 @@ function syncTestLab() {
   APP.dom.testLabRoomCode.textContent = room.roomCode;
   APP.dom.testLabJoinLink.textContent = joinLink;
   APP.dom.testLabPill.textContent = viewer?.isHost
-    ? "目前主揪視角"
-    : `現在偷看：${viewer?.name || "陪測分身"}`;
+    ? "坐在主揪位"
+    : `換成 ${viewer?.name || "分身"}`;
   if (carrierPreview) {
-    APP.dom.testLabPill.textContent = `模擬帶原者：${carrierPreview.name}`;
+    APP.dom.testLabPill.textContent = `帶原者：${carrierPreview.name}`;
   }
   APP.dom.testHostViewBtn.disabled = viewer?.isHost ?? true;
   APP.dom.testCarrierBtn.disabled = !(room.initialCarrierIds || []).length;
-  APP.dom.testCarrierBtn.textContent = carrierPreview ? "換下一位帶原者" : "模擬帶原者視角";
+  APP.dom.testCarrierBtn.textContent = carrierPreview ? "換下一位帶原者" : "偷看帶原者";
   APP.dom.testAdvanceBtn.classList.toggle("hidden", !(room.phase === "summary" && !viewer?.isHost));
   APP.dom.testAdvanceBtn.textContent = room.roundIndex >= room.roundCount ? "直接開獎去" : "下一局，走起";
   APP.dom.testLabHint.textContent = viewer?.isHost
-    ? "你現在看的是主揪總控畫面；想測玩家端，就切去任一陪測分身。"
-    : `你現在看的是 ${viewer?.name || "這位陪測分身"} 的畫面，出牌、偷測、去醫院都會直接算在這位頭上。`;
+    ? "主揪顧全桌；想自己出牌，挑個分身接手。"
+    : `${viewer?.name || "這位分身"} 交給你，出牌、偷測、跑醫院都算他的。`;
   APP.dom.testCarrierPanel.classList.toggle("hidden", !carrierPreview);
   if (carrierPreview) {
     APP.dom.testCarrierAvatar.textContent = carrierPreview.avatar;
     APP.dom.testCarrierName.textContent = carrierPreview.name;
-    APP.dom.testCarrierInfection.textContent = carrierPreview.isInfected ? "已感染" : "目前健康";
+    APP.dom.testCarrierInfection.textContent = carrierPreview.isInfected ? "已感染" : "還沒中";
     APP.dom.testCarrierTransmissions.textContent = `${carrierPreview.transmissionCount} 次`;
     APP.dom.testCarrierIntimacy.textContent = `${carrierPreview.intimacyCount} 次`;
   }
@@ -873,7 +873,7 @@ function formatTestViewLabel(player) {
     return `${player.avatar} 主揪本人${carrierLabel}`;
   }
   if (player.isBot) {
-    return `${player.avatar} ${player.name} · 陪測分身${carrierLabel}`;
+    return `${player.avatar} ${player.name} · 分身${carrierLabel}`;
   }
   return `${player.avatar} ${player.name}${carrierLabel}`;
 }
@@ -1705,10 +1705,10 @@ function renderLobby(snapshot) {
   APP.dom.joinLinkDisplay.textContent = snapshot.joinLink;
   APP.dom.playerCountDisplay.textContent = String(snapshot.players.length);
   APP.dom.startGameBtn.disabled = !snapshot.canStart;
-  APP.dom.startGameBtn.textContent = snapshot.testMode ? "陪測分身到齊，直接開喝" : "人齊就開喝";
+  APP.dom.startGameBtn.textContent = snapshot.testMode ? "分身到齊，開喝" : "人齊就開喝";
   APP.dom.hostControls.classList.toggle("hidden", snapshot.role !== "host");
   APP.dom.soloTestBtn.disabled = snapshot.testMode;
-  APP.dom.soloTestBtn.textContent = snapshot.testMode ? "單機測試已上線" : "單機測一把";
+  APP.dom.soloTestBtn.textContent = snapshot.testMode ? "7 個分身到齊" : "叫 7 個分身";
 
   if (snapshot.role === "host") {
     APP.dom.qrWrap.classList.remove("hidden");
@@ -1721,7 +1721,7 @@ function renderLobby(snapshot) {
   const currentPlayerIds = new Set(snapshot.players.map((player) => player.id));
   const fragment = document.createDocumentFragment();
   snapshot.players.forEach((player) => {
-    const identityLabel = player.isHost ? "主揪" : player.isBot ? "陪測分身" : "玩家";
+    const identityLabel = player.isHost ? "主揪" : player.isBot ? "分身" : "玩家";
     const statusLabel = player.online ? (player.isBot ? "待命中" : "已卡位") : "斷線中";
     const row = document.createElement("article");
     const justJoined = isHostLobby && previousPlayerIds.size > 0 && !previousPlayerIds.has(player.id);
@@ -1819,7 +1819,7 @@ function renderRound(snapshot) {
     && APP.testCarrierPreviewActive
     && APP.hostRoom?.players[getHostViewPlayerId()]?.isCarrier;
   APP.dom.selfRolePill.textContent = carrierPreview
-    ? "測試透視：初始帶原者"
+    ? "偷看：初始帶原者"
     : self.isInitialCarrier ? "初始帶原者 · 別說破" : describeRolePill(self);
   APP.dom.carrierMissionBanner.classList.toggle("hidden", !self.isInitialCarrier);
   if (self.isInitialCarrier) {
@@ -2140,13 +2140,13 @@ function startSoloTestGame() {
     return;
   }
   if (room.phase !== "lobby") {
-    showToast("這桌都已經開演了，單機測試要在開局前按。");
+    showToast("都開演了，分身下次再叫。");
     return;
   }
 
   const realGuests = Object.values(room.players).filter((player) => !player.isHost && !player.isBot);
   if (realGuests.length > 0) {
-    showToast("現在有真人在場，別偷切成單機測試。");
+    showToast("真人都進房了，分身今天休假。");
     return;
   }
 
@@ -2154,7 +2154,7 @@ function startSoloTestGame() {
   APP.testViewPlayerId = "";
   APP.testCarrierPreviewActive = false;
   hostSyncAll({ immediate: true });
-  showToast("陪測分身正在跳上玩家牆，馬上開演。");
+  showToast("七個分身正往牆上跳，等一下就開。");
   setTimeout(() => {
     if (APP.hostRoom === room && room.phase === "lobby" && room.testMode) {
       startHostedGame();
@@ -2391,7 +2391,7 @@ function buildCarrierMissionModals(player, roundIndex, playerId) {
     icon: "🦠",
     kicker: "你的隱藏身分",
     title: "你是初始帶原者",
-    body: "你是今晚 6 位初始帶原者之一。遊戲裡盡量促成無套性交；成功 2 次後，之後配到你的人會有 25% 起的機率被鎖住兩個戴套選項，最高 70%。別讓大家太早看穿。"
+    body: "你是今晚 6 位帶原者之一，別露餡。多拚幾次無套性交；成功 2 次，遇到你的人就開始抽 25% 鎖套，最高 70%。"
   }];
 }
 
@@ -2890,8 +2890,8 @@ function applyTimeoutDefaultSummary(summary, partnerName, wasOverridden) {
     summary.notes.unshift("時間到沒選，本來會默認「換一個」，但這局的欲求不滿事件蓋過了所有選項。");
     return;
   }
-  summary.body = `45 秒到了，你還沒出牌，系統直接幫你換掉 ${partnerName}。`;
-  summary.notes.unshift("時間到沒選，這局已經默認「換一個」。");
+  summary.body = `45 秒到了，你沒出牌，這局算你換掉 ${partnerName}。`;
+  summary.notes.unshift("鐘響沒選，默認「換一個」。");
 }
 
 function resolveHostedRound() {
@@ -3121,8 +3121,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
       rightSummary.chips.push({ label: "直接撲空", kind: "warn" });
     }
 
-    leftSummary.notes.push("提醒一下，玩到最後如果一次都沒下場，遊戲會直接說你根本來觀光。");
-    rightSummary.notes.push("提醒一下，玩到最後如果一次都沒下場，遊戲會直接說你根本來觀光。");
+    leftSummary.notes.push("整晚 0 次親密，只拿得到「來觀光」。");
+    rightSummary.notes.push("整晚 0 次親密，只拿得到「來觀光」。");
     return { left: leftSummary, right: rightSummary, public: publicStats };
   }
 
@@ -3208,14 +3208,14 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     }
 
     if (!leftInfectedBefore && left.isInfected && !left.detectedSelf) {
-      leftSummary.notes.push("你現在不一定馬上感覺得到什麼，但真想知道答案，還是得靠醫院翻牌。");
+      leftSummary.notes.push("剛中招不一定有感覺；想翻答案，去醫院。");
     } else if (leftPartnerWasInfected && !left.isInfected) {
       left.stats.closeCalls += 1;
       leftSummary.notes.push("這波其實擦身得很驚險，但你暫時還沒看到明顯異狀。");
     }
 
     if (!rightInfectedBefore && right.isInfected && !right.detectedSelf) {
-      rightSummary.notes.push("你現在不一定馬上感覺得到什麼，但真想知道答案，還是得靠醫院翻牌。");
+      rightSummary.notes.push("剛中招不一定有感覺；想翻答案，去醫院。");
     } else if (rightPartnerWasInfected && !right.isInfected) {
       right.stats.closeCalls += 1;
       rightSummary.notes.push("這波其實擦身得很驚險，但你暫時還沒看到明顯異狀。");
@@ -3291,11 +3291,11 @@ function appendCarrierRawSexProgress(summary, player) {
   const chance = getCarrierCondomLockChance(player);
   if (chance <= 0) {
     const remaining = GAME_CONFIG.carrierCondomLockMinimumRawSex - successes;
-    summary.notes.push(`帶原者任務累積 ${successes} 次；再成功 ${remaining} 次無套性交，就會開始提高對方戴套選項的上鎖機率。`);
+    summary.notes.push(`帶原進度 ${successes} 次。再成功 ${remaining} 次無套性交，對方就開始抽鎖套。`);
     return;
   }
   summary.chips.push({ label: `帶原者氣勢 ${Math.round(chance * 100)}%`, kind: "warn" });
-  summary.notes.push(`你已成功 ${successes} 次無套性交；之後配到你的人，兩個戴套選項有 ${Math.round(chance * 100)}% 額外機率被鎖。`);
+  summary.notes.push(`帶原進度 ${successes} 次。之後遇到你的人，有 ${Math.round(chance * 100)}% 會被鎖住兩個戴套選項。`);
 }
 
 function finalizeHealthAnxiety(value) {
