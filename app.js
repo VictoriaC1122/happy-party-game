@@ -1872,8 +1872,8 @@ function renderAwards(snapshot) {
         <strong>${escapeHtml(resultLabel)}</strong>
       </div>
       <div class="replay-meters">
-        <span>上頭 ${entry.postState.desire}%</span>
-        <span>慌張 ${entry.postState.anxiety}%</span>
+        <span>還想玩 ${entry.postState.desire}%</span>
+        <span>心裡多慌 ${entry.postState.anxiety}%</span>
         <span>親密 ${entry.postState.intimacyCount} 次</span>
       </div>
     `;
@@ -2685,8 +2685,8 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyIntimacy(left, resolvedActionKey, leftPartnerWasInfected);
     applyIntimacy(right, resolvedActionKey, rightPartnerWasInfected);
 
-    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。上頭值掉了點，但心裡也更七上八下。`;
-    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。上頭值掉了點，但心裡也更七上八下。`;
+    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。玩心消了一點，但心裡也更慌了。`;
+    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。玩心消了一點，但心裡也更慌了。`;
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
 

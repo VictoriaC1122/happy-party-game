@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260814m">
+  <link rel="stylesheet" href="./styles.css?v=20260814n">
   <script defer src="./data.js?v=20260814f"></script>
-  <script defer src="./app.js?v=20260814m"></script>
+  <script defer src="./app.js?v=20260814n"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -263,7 +263,7 @@
       <div class="panel-head">
         <div>
           <p class="eyebrow">現場開始亂</p>
-          <h2 id="round-title">第 1 局 / 7</h2>
+          <h2 id="round-title">Round 1 / 10</h2>
         </div>
         <div class="round-meta">
           <span id="timer-pill" class="phase-pill warm">主揪還沒發車</span>
@@ -273,14 +273,16 @@
 
       <div class="stats-grid">
         <article class="stat-card">
-          <span>上頭值</span>
+          <span>還想玩</span>
           <strong id="desire-value">50%</strong>
           <div class="meter"><div id="desire-bar" class="meter-fill desire-fill"></div></div>
+          <small class="stat-hint">還剩多少玩心；親密會降，換人、撲空或去醫院會升。</small>
         </article>
         <article class="stat-card">
-          <span>慌張值</span>
+          <span>心裡多慌</span>
           <strong id="anxiety-value">0%</strong>
           <div class="meter"><div id="anxiety-bar" class="meter-fill anxiety-fill"></div></div>
+          <small class="stat-hint">高風險會升；到 80% 時，眼前線索會開始看花。</small>
         </article>
         <article class="stat-card mini">
           <span>親密次數</span>
@@ -292,7 +294,7 @@
         </article>
       </div>
 
-      <div id="panic-warning" class="panic-warning hidden">你有點上頭了，看到的線索開始糊成一坨。</div>
+      <div id="panic-warning" class="panic-warning hidden">你現在慌到眼花，線索開始糊成一坨。</div>
 
       <div class="battle-grid">
         <article class="partner-card">

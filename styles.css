@@ -802,6 +802,14 @@ select {
   transition: width 0.3s ease;
 }
 
+.stat-hint {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
 .desire-fill {
   background: linear-gradient(90deg, #d7b8c0, #b98693, #8f5c6a);
 }
