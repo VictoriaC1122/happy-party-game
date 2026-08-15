@@ -1,6 +1,9 @@
 const STORAGE_KEY = "happy-party-profile-v1";
 const CONSENT_KEY = "happy-party-consent-v1";
 const PLAYER_SESSIONS_KEY = "happy-party-player-sessions-v1";
+const PLAYER_SNAPSHOT_KEY = "happy-party-player-snapshot-v1";
+const HOST_SESSION_KEY = "happy-party-host-session-v1";
+const PERSISTED_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const HOST_PEER_PREFIX = "happy-party-host-";
 const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
 const EVENT_WIFI = Object.freeze({
@@ -91,8 +94,11 @@ const APP = {
   selfId: "",
   playerSessionId: "",
   autoResumeStarted: false,
+  hostRestoreStarted: false,
+  hostPersistenceSignature: "",
   selectedAvatar: AVATARS[0],
   pendingRoomCode: "",
+  pendingHostRoomCode: "",
   renderFrame: null,
   countdownTimer: null,
   hostDeadlineTimer: null,
@@ -457,6 +463,9 @@ function bindDomEvents() {
       APP.dom.playerNameInput.focus();
       return;
     }
+    if (resumeHostRoomFromStorage()) {
+      return;
+    }
     switchScreen("mode-screen");
   });
 
@@ -502,6 +511,7 @@ function bindDomEvents() {
   });
   window.addEventListener("online", resumeActiveConnection);
   window.addEventListener("pageshow", resumeActiveConnection);
+  window.addEventListener("pagehide", () => persistHostSession({ force: true }));
 }
 
 function hydrateConsent() {
@@ -513,10 +523,11 @@ function hydrateConsent() {
 function hydrateRoomQuery() {
   const params = new URLSearchParams(window.location.search);
   const room = sanitizeRoomCode(params.get("room") || "");
-  if (!room) {
+  if (room) {
+    APP.pendingRoomCode = room;
     return;
   }
-  APP.pendingRoomCode = room;
+  APP.pendingHostRoomCode = sanitizeRoomCode(params.get("host") || "");
 }
 
 function hydrateStoredProfile() {
@@ -573,11 +584,156 @@ function getStoredPlayerSessionId(roomCode) {
 function getOrCreatePlayerSessionId(roomCode, preferredId = "") {
   const room = sanitizeRoomCode(roomCode);
   const sessions = loadPlayerSessions();
-  const current = sanitizePlayerSessionId(typeof sessions[room] === "string" ? sessions[room] : sessions[room]?.id);
+  const existingRecord = sessions[room] && typeof sessions[room] === "object" ? sessions[room] : {};
+  const current = sanitizePlayerSessionId(typeof sessions[room] === "string" ? sessions[room] : existingRecord.id);
   const sessionId = sanitizePlayerSessionId(preferredId) || current || createPlayerSessionId();
-  sessions[room] = { id: sessionId, updatedAt: Date.now() };
+  sessions[room] = { ...existingRecord, id: sessionId, updatedAt: Date.now() };
   savePlayerSessions(sessions);
   return sessionId;
+}
+
+function readPersistedJson(key) {
+  const candidates = [];
+  for (const storageName of ["localStorage", "sessionStorage"]) {
+    try {
+      const raw = window[storageName].getItem(key);
+      if (raw) {
+        candidates.push(JSON.parse(raw));
+      }
+    } catch (error) {
+      // Try the other browser storage before giving up on reload recovery.
+    }
+  }
+  return candidates.sort((left, right) => Number(right?.updatedAt || 0) - Number(left?.updatedAt || 0))[0] || null;
+}
+
+function writePersistedJson(key, value) {
+  const serialized = JSON.stringify(value);
+  for (const storageName of ["localStorage", "sessionStorage"]) {
+    try {
+      window[storageName].setItem(key, serialized);
+      return true;
+    } catch (error) {
+      // Private browsing or a full quota may still allow the fallback storage.
+    }
+  }
+  return false;
+}
+
+function removePersistedValue(key) {
+  for (const storageName of ["localStorage", "sessionStorage"]) {
+    try {
+      window[storageName].removeItem(key);
+    } catch (error) {
+      // Storage cleanup is best-effort.
+    }
+  }
+}
+
+function clearStoredPlayerSnapshot(roomCode = "") {
+  const stored = readPersistedJson(PLAYER_SNAPSHOT_KEY);
+  if (!roomCode || sanitizeRoomCode(stored?.roomCode) === sanitizeRoomCode(roomCode)) {
+    removePersistedValue(PLAYER_SNAPSHOT_KEY);
+  }
+}
+
+function persistPlayerSnapshot(snapshot) {
+  if (APP.role !== "player" || !snapshot || !APP.roomCode || !APP.playerSessionId) {
+    return;
+  }
+  writePersistedJson(PLAYER_SNAPSHOT_KEY, {
+    version: 1,
+    updatedAt: Date.now(),
+    roomCode: APP.roomCode,
+    sessionId: APP.playerSessionId,
+    snapshot
+  });
+}
+
+function loadStoredPlayerSnapshot(roomCode, sessionId) {
+  const stored = readPersistedJson(PLAYER_SNAPSHOT_KEY);
+  if (
+    stored?.version !== 1
+    || Date.now() - Number(stored.updatedAt || 0) > PERSISTED_SESSION_MAX_AGE_MS
+    || sanitizeRoomCode(stored.roomCode) !== sanitizeRoomCode(roomCode)
+    || sanitizePlayerSessionId(stored.sessionId) !== sanitizePlayerSessionId(sessionId)
+    || !stored.snapshot
+    || sanitizeRoomCode(stored.snapshot.roomCode) !== sanitizeRoomCode(roomCode)
+  ) {
+    return null;
+  }
+  return stored.snapshot;
+}
+
+function clearStoredHostSession() {
+  APP.hostPersistenceSignature = "";
+  removePersistedValue(HOST_SESSION_KEY);
+}
+
+function persistHostSession({ force = false } = {}) {
+  if (APP.role !== "host" || !APP.hostRoom || !APP.roomCode || !APP.hostPeerId) {
+    return false;
+  }
+  let roomSignature = "";
+  try {
+    roomSignature = JSON.stringify(APP.hostRoom);
+  } catch (error) {
+    return false;
+  }
+  if (!force && roomSignature === APP.hostPersistenceSignature) {
+    return true;
+  }
+  const saved = writePersistedJson(HOST_SESSION_KEY, {
+    version: 1,
+    updatedAt: Date.now(),
+    roomCode: APP.roomCode,
+    hostPeerId: APP.hostPeerId,
+    selfId: APP.selfId,
+    room: APP.hostRoom
+  });
+  if (saved) {
+    APP.hostPersistenceSignature = roomSignature;
+  }
+  return saved;
+}
+
+function loadStoredHostSession() {
+  const stored = readPersistedJson(HOST_SESSION_KEY);
+  const roomCode = sanitizeRoomCode(stored?.roomCode);
+  const hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
+  const room = stored?.room;
+  const validPhase = ["lobby", "round", "summary", "awards"].includes(room?.phase);
+  if (
+    stored?.version !== 1
+    || !roomCode
+    || stored.hostPeerId !== hostPeerId
+    || stored.selfId !== hostPeerId
+    || Date.now() - Number(stored.updatedAt || 0) > PERSISTED_SESSION_MAX_AGE_MS
+    || !room
+    || room.roomCode !== roomCode
+    || room.hostId !== hostPeerId
+    || !validPhase
+    || !room.players
+    || typeof room.players !== "object"
+    || !room.players[hostPeerId]?.isHost
+  ) {
+    if (stored) {
+      clearStoredHostSession();
+    }
+    return null;
+  }
+
+  room.testMode = Boolean(room.testMode);
+  room.testBotIds = Array.isArray(room.testBotIds) ? room.testBotIds : [];
+  room.gamePlayerIds = Array.isArray(room.gamePlayerIds) ? room.gamePlayerIds : [];
+  room.replayArchive = Array.isArray(room.replayArchive) ? room.replayArchive : [];
+  room.initialCarrierIds = Array.isArray(room.initialCarrierIds) ? room.initialCarrierIds : [];
+  room.pairSchedule = Array.isArray(room.pairSchedule) ? room.pairSchedule : [];
+  Object.values(room.players).forEach((player) => {
+    player.online = Boolean(player.isHost || player.isBot);
+  });
+
+  return { roomCode, hostPeerId, selfId: hostPeerId, room };
 }
 
 function persistPlayerRoomInUrl(roomCode) {
@@ -585,9 +741,35 @@ function persistPlayerRoomInUrl(roomCode) {
     return;
   }
   const url = new URL(window.location.href);
+  url.searchParams.delete("host");
   url.searchParams.set("room", sanitizeRoomCode(roomCode));
   url.hash = "";
   window.history.replaceState(null, "", url.toString());
+}
+
+function persistHostRoomInUrl(roomCode) {
+  if (!window.history?.replaceState) {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.delete("room");
+  url.searchParams.set("host", sanitizeRoomCode(roomCode));
+  url.hash = "";
+  window.history.replaceState(null, "", url.toString());
+  APP.pendingHostRoomCode = sanitizeRoomCode(roomCode);
+}
+
+function clearRoomFromUrl() {
+  if (!window.history?.replaceState) {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.delete("room");
+  url.searchParams.delete("host");
+  url.hash = "";
+  window.history.replaceState(null, "", url.toString());
+  APP.pendingRoomCode = "";
+  APP.pendingHostRoomCode = "";
 }
 
 function resumePendingRoomFromStorage() {
@@ -605,7 +787,115 @@ function resumePendingRoomFromStorage() {
   APP.selectedAvatar = profile.avatar;
   highlightAvatarChip(profile.avatar);
   switchScreen("join-screen");
-  beginPlayerJoin(APP.pendingRoomCode, profile, { isReconnect: true, sessionId });
+  beginPlayerJoin(APP.pendingRoomCode, profile, {
+    isReconnect: true,
+    sessionId,
+    preservedSnapshot: loadStoredPlayerSnapshot(APP.pendingRoomCode, sessionId)
+  });
+  return true;
+}
+
+function resumeRestoredHostRuntime() {
+  clearTimeout(APP.hostDeadlineTimer);
+  APP.hostDeadlineTimer = null;
+  const room = APP.hostRoom;
+  if (!room || room.phase !== "round" || !room.round || room.round.resolved) {
+    return;
+  }
+  const remainingMs = Math.max(0, Number(room.round.deadlineAt || 0) - Date.now());
+  APP.hostDeadlineTimer = setTimeout(resolveHostedRound, remainingMs + 100);
+  queueSoloTestBotsForRound();
+}
+
+function scheduleRestoredHostBootstrapRetry() {
+  if (APP.role !== "host" || !APP.hostRoom || APP.hostPeerRecoveryTimer) {
+    return;
+  }
+  const delayIndex = Math.min(APP.hostPeerRecoveryAttempts, HOST_PEER_RECOVERY_DELAYS_MS.length - 1);
+  APP.hostPeerRecoveryAttempts += 1;
+  APP.hostPeerRecoveryTimer = setTimeout(() => {
+    APP.hostPeerRecoveryTimer = null;
+    connectRestoredHostPeer();
+  }, HOST_PEER_RECOVERY_DELAYS_MS[delayIndex]);
+}
+
+function connectRestoredHostPeer() {
+  if (APP.role !== "host" || !APP.hostRoom || !APP.hostPeerId || APP.peer) {
+    return;
+  }
+  ensurePeerLibrary()
+    .then(() => {
+      if (APP.role !== "host" || !APP.hostRoom || APP.peer) {
+        return;
+      }
+      const peer = createPeerClient(APP.hostPeerId);
+      APP.peer = peer;
+      APP.hostPeerRegistered = false;
+      wireHostPeer(peer);
+      let opened = false;
+      const openTimer = setTimeout(() => {
+        if (opened || APP.peer !== peer || APP.role !== "host") {
+          return;
+        }
+        try {
+          peer.destroy();
+        } catch (error) {
+          // The host recovery loop below will rebuild the same room id.
+        }
+        scheduleHostPeerRecovery(peer);
+      }, PEER_OPEN_TIMEOUT_MS);
+
+      peer.on("open", () => {
+        if (APP.peer !== peer || APP.role !== "host") {
+          return;
+        }
+        opened = true;
+        clearTimeout(openTimer);
+        hostPeerRecovered(peer);
+        showToast("整桌接回來了，房號和進度都沒掉。");
+      });
+      peer.on("disconnected", () => handleHostPeerDisconnected(peer));
+      peer.on("error", () => {
+        clearTimeout(openTimer);
+        if (APP.peer !== peer || APP.role !== "host") {
+          return;
+        }
+        APP.hostPeerRegistered = false;
+        try {
+          peer.destroy();
+        } catch (error) {
+          // Keep the saved room and retry the same Peer id.
+        }
+        scheduleHostPeerRecovery(peer);
+      });
+    })
+    .catch(() => {
+      showToast("整桌進度還在，連線工具正在重新接上。");
+      scheduleRestoredHostBootstrapRetry();
+    });
+}
+
+function resumeHostRoomFromStorage() {
+  if (APP.hostRestoreStarted || APP.pendingRoomCode || !APP.pendingHostRoomCode) {
+    return false;
+  }
+  const stored = loadStoredHostSession();
+  if (!stored || stored.roomCode !== APP.pendingHostRoomCode) {
+    return false;
+  }
+  APP.hostRestoreStarted = true;
+  APP.role = "host";
+  APP.roomCode = stored.roomCode;
+  APP.hostPeerId = stored.hostPeerId;
+  APP.selfId = stored.selfId;
+  APP.hostRoom = stored.room;
+  APP.hostPeerRegistered = false;
+  APP.hostPeerRecoveryAttempts = 0;
+  APP.hostPersistenceSignature = "";
+  resumeRestoredHostRuntime();
+  hostSyncAll({ immediate: true });
+  showToast("剛剛只是重整，整桌還在，正在把大家接回來。");
+  connectRestoredHostPeer();
   return true;
 }
 
@@ -613,7 +903,10 @@ function tryAutoResumeStoredRoom() {
   if (localStorage.getItem(CONSENT_KEY) !== "yes") {
     return;
   }
-  resumePendingRoomFromStorage();
+  if (resumePendingRoomFromStorage()) {
+    return;
+  }
+  resumeHostRoomFromStorage();
 }
 
 function renderAvatarPicker() {
@@ -747,6 +1040,9 @@ function closeEventModal() {
   if (!APP.eventModalOpen || !APP.dom.eventModal) {
     return;
   }
+  if (APP.dom.eventModal.contains(document.activeElement) && typeof document.activeElement.blur === "function") {
+    document.activeElement.blur();
+  }
   APP.eventModalOpen = false;
   APP.currentEventModal = null;
   APP.dom.eventModal.classList.add("hidden");
@@ -773,6 +1069,9 @@ function clearEventModals() {
   APP.shownEventModalKeys.clear();
   document.body.classList.remove("event-modal-open");
   if (APP.dom.eventModal) {
+    if (APP.dom.eventModal.contains(document.activeElement) && typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
     APP.dom.eventModal.classList.add("hidden");
     APP.dom.eventModal.setAttribute("aria-hidden", "true");
   }
@@ -1121,11 +1420,20 @@ function startPlayerConnectionWatchdog() {
 }
 
 function resumeActiveConnection() {
-  if (APP.role === "host" && APP.peer?.disconnected) {
-    handleHostPeerDisconnected(APP.peer);
+  if (APP.role === "host") {
+    if (!APP.peer) {
+      connectRestoredHostPeer();
+    } else if (APP.peer.disconnected) {
+      handleHostPeerDisconnected(APP.peer);
+    }
     return;
   }
-  if (APP.role !== "player" || !APP.playerProfile || !APP.peer) {
+  if (APP.role !== "player" || !APP.playerProfile) {
+    return;
+  }
+
+  if (!APP.peer) {
+    schedulePlayerBootstrapRetry("網路回來了，我正在接回原本的座位。");
     return;
   }
 
@@ -1195,18 +1503,38 @@ function schedulePlayerReconnect(message) {
   }
   showToast(message);
 
-  if (APP.playerReconnectAttempts >= PLAYER_RECONNECT_DELAYS_MS.length) {
-    fallbackToJoinScreen("跟主揪失聯太久了，回入口重新滑進來吧。");
-    return;
-  }
   if (APP.playerReconnectTimer) {
     return;
   }
 
-  const delay = PLAYER_RECONNECT_DELAYS_MS[APP.playerReconnectAttempts];
+  const delayIndex = Math.min(APP.playerReconnectAttempts, PLAYER_RECONNECT_DELAYS_MS.length - 1);
+  const delay = PLAYER_RECONNECT_DELAYS_MS[delayIndex];
   APP.playerReconnectTimer = setTimeout(() => {
     APP.playerReconnectTimer = null;
     attemptPlayerReconnect();
+  }, delay);
+}
+
+function schedulePlayerBootstrapRetry(message) {
+  if (APP.role !== "player" || !APP.playerProfile || APP.playerReconnectTimer) {
+    return;
+  }
+  APP.playerReconnectActive = true;
+  if (APP.playerSnapshot) {
+    renderPlayerSnapshot();
+  }
+  showToast(message);
+  const delayIndex = Math.min(APP.playerReconnectAttempts, PLAYER_RECONNECT_DELAYS_MS.length - 1);
+  const delay = PLAYER_RECONNECT_DELAYS_MS[delayIndex];
+  APP.playerReconnectAttempts += 1;
+  APP.playerReconnectTimer = setTimeout(() => {
+    APP.playerReconnectTimer = null;
+    const snapshot = APP.playerSnapshot;
+    beginPlayerJoin(APP.roomCode, APP.playerProfile, {
+      isReconnect: true,
+      sessionId: APP.playerSessionId,
+      preservedSnapshot: snapshot
+    });
   }, delay);
 }
 
@@ -1556,6 +1884,8 @@ async function handleCreateRoom(testMode = false) {
     showToast("你主揪名號空著，直接送你「今晚主揪」。");
   }
 
+  clearStoredHostSession();
+  clearRoomFromUrl();
   destroyPeerState();
   setCreateRoomBusy(true, testMode ? "test" : "formal");
   try {
@@ -1608,6 +1938,7 @@ function attemptCreateHostPeer(profile, attempts, testMode = false) {
     APP.selfId = id;
     APP.roomCode = roomCode;
     APP.hostPeerId = hostPeerId;
+    persistHostRoomInUrl(roomCode);
     APP.hostRoom = createHostRoom(profile, testMode);
     wireHostPeer(peer);
     startHostHeartbeat();
@@ -1764,23 +2095,35 @@ async function handleJoinSubmit(event) {
 
 async function beginPlayerJoin(roomCode, profile, options = {}) {
   const sessionId = getOrCreatePlayerSessionId(roomCode, options.sessionId);
+  const preservedSnapshot = options.preservedSnapshot || null;
   destroyPeerState();
   rememberPlayerProfile(profile);
   APP.playerSessionId = sessionId;
   APP.pendingRoomCode = roomCode;
+  APP.role = "player";
+  APP.roomCode = roomCode;
+  APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
+  APP.playerSnapshot = preservedSnapshot;
+  APP.playerReconnectActive = Boolean(options.isReconnect);
   persistPlayerRoomInUrl(roomCode);
   setJoinFormBusy(true, options.isReconnect ? "正在接回座位…" : "潛入中…");
   showToast(options.isReconnect ? "正在接回你原本的座位。" : "正在找主揪對暗號，等我一下。");
+  if (preservedSnapshot) {
+    renderPlayerSnapshot(preservedSnapshot);
+  } else {
+    renderJoiningLobby(profile, roomCode, options.isReconnect ? "接回座位中" : "潛入中");
+  }
   try {
     await ensurePeerLibrary();
     createPlayerPeer(roomCode, profile, {
       isReconnect: Boolean(options.isReconnect),
-      preserveSnapshot: Boolean(options.preserveSnapshot),
+      preserveSnapshot: Boolean(options.preserveSnapshot || preservedSnapshot),
+      preservedSnapshot,
       sessionId
     });
   } catch (error) {
     clearJoinAttemptState();
-    showToast("連線工具沒載到，再滑一次就好。");
+    schedulePlayerBootstrapRetry("連線工具卡了一下，原座位還在，我繼續接。");
   }
 }
 
@@ -1788,7 +2131,8 @@ function createPlayerPeer(roomCode, profile, options = {}) {
   const peerId = `happy-party-player-${randomId(12)}`;
   const peer = createPeerClient(peerId);
   let initialized = false;
-  const preservedSnapshot = options.preserveSnapshot ? APP.playerSnapshot : null;
+  const preservedSnapshot = options.preservedSnapshot
+    || (options.preserveSnapshot ? APP.playerSnapshot : null);
   const sessionId = getOrCreatePlayerSessionId(roomCode, options.sessionId || APP.playerSessionId);
   rememberPlayerProfile(profile);
   APP.playerSessionId = sessionId;
@@ -1796,6 +2140,7 @@ function createPlayerPeer(roomCode, profile, options = {}) {
   APP.role = "player";
   APP.roomCode = roomCode;
   APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
+  APP.playerReconnectActive = Boolean(options.isReconnect);
   const openTimer = setTimeout(() => {
     if (initialized || APP.peer !== peer) {
       return;
@@ -2047,6 +2392,7 @@ function handlePlayerMessage(packet) {
   if (packet.type === "join-rejected") {
     clearLocalPendingState();
     clearJoinAttemptState();
+    clearStoredPlayerSnapshot(APP.roomCode);
     showToast(packet.reason || "主揪現在不收人。");
     switchScreen("join-screen");
     return;
@@ -2077,6 +2423,7 @@ function handlePlayerMessage(packet) {
     APP.playerReconnectAttempts = 0;
     APP.playerReconnectActive = false;
     reconcileLocalPendingState(packet.snapshot);
+    persistPlayerSnapshot(packet.snapshot);
     renderPlayerSnapshot();
     if (wasReconnecting && hadSnapshot) {
       showToast("跟主揪接回來了，繼續玩。");
@@ -2113,6 +2460,7 @@ function flushHostSync() {
   if (!APP.hostRoom) {
     return;
   }
+  persistHostSession();
   const sharedContext = buildSnapshotSharedContext(APP.hostRoom);
   renderHostSnapshot(sharedContext);
   APP.hostConnections.forEach((conn, playerId) => {
@@ -2159,7 +2507,7 @@ function renderJoiningLobby(profile, roomCode, phaseLabel) {
   APP.dom.playerCountDisplay.textContent = "…";
   APP.dom.startGameBtn.disabled = true;
   APP.dom.hostControls.classList.add("hidden");
-  APP.dom.qrWrap.classList.add("hidden");
+  APP.dom.lobbyQrStage.classList.add("hidden");
   APP.dom.playerList.innerHTML = `
     <article class="player-row">
       <div class="player-avatar">${escapeHtml(profile.avatar)}</div>
@@ -4730,6 +5078,8 @@ function escapeHtml(value) {
 }
 
 function restartApp() {
+  clearStoredHostSession();
+  clearStoredPlayerSnapshot(APP.roomCode);
   window.location.href = `${window.location.pathname}`;
 }
 
@@ -4737,6 +5087,8 @@ function exitTestMode() {
   if (APP.role !== "host" || !APP.hostRoom?.testMode) {
     return;
   }
+  clearStoredHostSession();
+  clearRoomFromUrl();
   destroyPeerState();
   setCreateRoomBusy(false);
   switchScreen("mode-screen");
@@ -4794,6 +5146,8 @@ function destroyPeerState() {
   APP.hostPeerRecoveryTimer = null;
   APP.hostPeerRecoveryAttempts = 0;
   APP.hostPeerRegistered = false;
+  APP.hostRestoreStarted = false;
+  APP.hostPersistenceSignature = "";
   APP.connectionHealthTimers = new WeakMap();
   APP.lastHostPacketAt = 0;
   APP.hostSyncTimer = null;
