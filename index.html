@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260815d">
+  <link rel="stylesheet" href="./styles.css?v=20260815e">
   <script defer src="./data.js?v=20260815d"></script>
-  <script defer src="./app.js?v=20260815i"></script>
+  <script defer src="./app.js?v=20260815j"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -67,24 +67,6 @@
           </article>
         </article>
 
-        <article class="notice-card test-join-card">
-          <h3>找人進場</h3>
-          <div class="info-pair">
-            <span>房號</span>
-            <strong id="test-lab-room-code">------</strong>
-          </div>
-          <div class="info-pair">
-            <span>加入連結</span>
-            <strong id="test-lab-join-link">開桌後就會冒出來</strong>
-          </div>
-          <div class="qr-wrap mini-qr-wrap">
-            <div id="test-qr-code"></div>
-            <p>玩家掃碼加入</p>
-          </div>
-          <div class="actions-row">
-            <button id="test-lab-copy-btn" class="ghost-btn">複製加入連結</button>
-          </div>
-        </article>
       </div>
     </section>
 
@@ -147,11 +129,15 @@
     <section id="mode-screen" class="panel screen hidden">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">今晚你是哪一掛</p>
-          <h2>挑個身份上桌</h2>
+          <p class="eyebrow">今晚怎麼玩</p>
+          <h2>正式開桌，或自己測一輪</h2>
         </div>
       </div>
       <div class="mode-grid">
+        <div class="mode-section-label">
+          <strong>正式遊玩</strong>
+          <span>這裡只等真人，不會混進測試分身。</span>
+        </div>
         <article class="mode-card">
           <p class="mode-icon">🎤</p>
           <h3>我是今晚主揪</h3>
@@ -167,6 +153,18 @@
           <h3>我是來鬧的玩家</h3>
           <p>房號一打、綽號一報，名字直接上牆。</p>
           <button id="goto-join-btn" class="secondary-btn">手動輸房號</button>
+        </article>
+        <div class="mode-section-label test-mode-label">
+          <strong>測試遊玩</strong>
+          <span>不用等人，測試桌和正式房各走各的。</span>
+        </div>
+        <article class="mode-card test-entry-card">
+          <p class="mode-icon">🧪</p>
+          <div class="test-entry-copy">
+            <h3>開一桌測試</h3>
+            <p>系統會補 7 個分身。你可以換角色、偷看帶原者，也能用 QR Code 加另一支手機。</p>
+          </div>
+          <button id="create-test-room-btn" class="ghost-btn">進入單人測試</button>
         </article>
         <article class="mode-card game-guide-card">
           <p class="mode-icon">📖</p>
@@ -248,7 +246,7 @@
     <section id="lobby-screen" class="panel screen hidden">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">人還在集合</p>
+          <p id="lobby-eyebrow" class="eyebrow">人還在集合</p>
           <h2 id="lobby-title">大家卡位中</h2>
         </div>
         <span id="phase-pill" class="phase-pill">等開桌</span>
@@ -270,7 +268,6 @@
           </div>
           <div class="actions-row" id="host-controls">
             <button id="copy-link-btn" class="secondary-btn">複製進場連結</button>
-            <button id="solo-test-btn" class="ghost-btn">叫 7 個分身</button>
             <button id="start-game-btn" class="primary-btn" disabled>人齊就開喝</button>
           </div>
         </article>

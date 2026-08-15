@@ -461,6 +461,58 @@ select {
   align-items: start;
 }
 
+.mode-section-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 2px 4px 0;
+}
+
+.mode-section-label strong {
+  color: #754b58;
+  font-size: 1.05rem;
+}
+
+.mode-section-label span {
+  color: var(--faint);
+  font-size: 0.9rem;
+}
+
+.test-mode-label {
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(116, 82, 92, 0.12);
+}
+
+.test-entry-card {
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  background:
+    radial-gradient(circle at 8% 22%, rgba(191, 143, 151, 0.18), transparent 28%),
+    linear-gradient(120deg, rgba(255, 252, 250, 0.92), rgba(231, 217, 218, 0.78));
+}
+
+.test-entry-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.test-entry-copy h3,
+.test-entry-copy p {
+  margin: 0;
+}
+
+.test-entry-copy p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.test-entry-card > button {
+  min-width: 170px;
+}
+
 .test-lab {
   display: grid;
   gap: 16px;
@@ -470,7 +522,7 @@ select {
 .test-lab-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: 1.08fr 0.92fr;
+  grid-template-columns: 1fr;
 }
 
 .test-lab-hint {
@@ -1614,6 +1666,19 @@ body.event-modal-open {
 
   .game-guide-card {
     grid-column: auto;
+  }
+
+  .mode-section-label,
+  .test-entry-card {
+    grid-column: auto;
+  }
+
+  .test-entry-card {
+    grid-template-columns: 1fr;
+  }
+
+  .test-entry-card > button {
+    width: 100%;
   }
 
   .game-guide-card .game-guide {
