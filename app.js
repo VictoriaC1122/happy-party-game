@@ -3114,9 +3114,7 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
         left.stats.correctLeaves += 1;
       }
     } else if (!leftSummary.body) {
-      applyFailedAttempt(left);
-      leftSummary.body = `${right.name} 完全沒接你的節奏，這局直接變空氣球。`;
-      leftSummary.chips.push({ label: "直接撲空", kind: "warn" });
+      applyBlockedAttempt(leftSummary, left, right, leftActionKey, rightActionKey);
     }
 
     if (rightActionKey === "refuse") {
@@ -3127,13 +3125,11 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
         right.stats.correctLeaves += 1;
       }
     } else if (!rightSummary.body) {
-      applyFailedAttempt(right);
-      rightSummary.body = `${left.name} 完全沒接你的節奏，這局直接變空氣球。`;
-      rightSummary.chips.push({ label: "直接撲空", kind: "warn" });
+      applyBlockedAttempt(rightSummary, right, left, rightActionKey, leftActionKey);
     }
 
-    leftSummary.notes.push("整晚 0 次親密，只拿得到「來觀光」。");
-    rightSummary.notes.push("整晚 0 次親密，只拿得到「來觀光」。");
+    appendNoExperienceReminder(leftSummary, left);
+    appendNoExperienceReminder(rightSummary, right);
     return { left: leftSummary, right: rightSummary, public: publicStats };
   }
 
@@ -3236,6 +3232,24 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
   }
 
   return { left: leftSummary, right: rightSummary, public: publicStats };
+}
+
+function applyBlockedAttempt(summary, player, partner, actionKey, partnerActionKey) {
+  applyFailedAttempt(player);
+  const actionLabel = ACTIONS[actionKey]?.shortLabel || "親密互動";
+  if (partnerActionKey === "hospital") {
+    summary.body = `你選了「${actionLabel}」，但 ${partner.name} 這局跑去醫院，所以什麼都沒發生。`;
+    summary.chips.push({ label: "對方去醫院", kind: "warn" });
+    return;
+  }
+  summary.body = `你選了「${actionLabel}」，但 ${partner.name} 選了「換一個」，所以這局沒發生。`;
+  summary.chips.push({ label: "對方選了換一個", kind: "warn" });
+}
+
+function appendNoExperienceReminder(summary, player) {
+  if (player.intimacyCount === 0) {
+    summary.notes.push("你目前還是 0 次親密；終局還是 0 次，才會拿到「來觀光」。");
+  }
 }
 
 function isIntimacyAction(actionKey) {
