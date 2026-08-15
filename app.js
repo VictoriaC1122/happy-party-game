@@ -1414,6 +1414,14 @@ function handlePlayerMessage(packet) {
     return;
   }
 
+  if (packet.type === "action-rejected") {
+    APP.localPending.submission = null;
+    APP.localPending.utility = null;
+    renderPlayerSnapshot();
+    showToast(packet.message || "這個選項現在不能用。");
+    return;
+  }
+
   if (packet.type === "heartbeat") {
     return;
   }
@@ -1544,6 +1552,7 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       healthAnxiety: me.healthAnxiety,
       intimacyCount: me.intimacyCount,
       testkits: me.testkits,
+      hospitalVisitsRemaining: Math.max(0, GAME_CONFIG.hospitalVisitLimit - (me.stats.hospitals || 0)),
       detectedSelf: me.detectedSelf,
       detectedInfected: me.detectedSelf ? me.detectedInfected : null,
       isInitialCarrier: Boolean(me.isCarrier),
@@ -1847,6 +1856,7 @@ function renderRound(snapshot) {
   APP.dom.dissatisfactionBar.style.width = `${self.dissatisfaction}%`;
   APP.dom.healthAnxietyBar.style.width = `${self.healthAnxiety}%`;
   const healthAnxietyBlocksChat = self.healthAnxiety >= GAME_CONFIG.healthAnxietyChatThreshold;
+  const hospitalVisitsRemaining = self.hospitalVisitsRemaining || 0;
   APP.dom.healthAnxietyWarning.classList.toggle("hidden", !healthAnxietyBlocksChat);
 
   if (!round.partner) {
@@ -1854,24 +1864,27 @@ function renderRound(snapshot) {
     APP.dom.partnerName.textContent = "這局放空";
     APP.dom.partnerFlirt.textContent = "「這局讓你喘口氣，暫時沒人跟你對到。」";
     APP.dom.partnerTags.replaceChildren();
-    setPartnerToolState(false, isLocked, healthAnxietyBlocksChat);
+    setPartnerToolState(false, isLocked, healthAnxietyBlocksChat, hospitalVisitsRemaining);
     renderActionButtonStates([], {}, effectiveSubmission, true, Boolean(pendingUtility));
   } else {
     APP.dom.partnerAvatar.textContent = round.partner.avatar;
     APP.dom.partnerName.textContent = round.partner.name;
     APP.dom.partnerFlirt.textContent = `「${round.partner.flirt}」`;
     renderPartnerTags(round.partner, self.healthAnxiety);
-    setPartnerToolState(true, isLocked, healthAnxietyBlocksChat);
+    setPartnerToolState(true, isLocked, healthAnxietyBlocksChat, hospitalVisitsRemaining);
     renderActionButtonStates(round.availableActions, round.actionLocks || {}, effectiveSubmission, false, Boolean(pendingUtility || reconnecting));
   }
 
   startCountdown(round.deadlineAt, round.submissionProgress, snapshot.role === "host");
 }
 
-function setPartnerToolState(hasPartner, locked, healthAnxietyBlocksChat = false) {
+function setPartnerToolState(hasPartner, locked, healthAnxietyBlocksChat = false, hospitalVisitsRemaining = 0) {
   APP.dom.chatBtn.disabled = !hasPartner || locked || healthAnxietyBlocksChat;
   APP.dom.testBtn.disabled = !hasPartner || locked;
-  APP.dom.hospitalBtn.disabled = locked;
+  APP.dom.hospitalBtn.disabled = locked || hospitalVisitsRemaining <= 0;
+  APP.dom.hospitalBtn.textContent = hospitalVisitsRemaining > 0
+    ? `🏥 去驗一下（剩 ${hospitalVisitsRemaining} 次）`
+    : "🏥 今晚已驗過";
 }
 
 function renderPartnerTags(partner, healthAnxiety) {
@@ -2441,7 +2454,7 @@ function chooseSoloTestAction(playerId) {
     return "refuse";
   }
   if (!partnerId) {
-    return Math.random() < 0.28 ? "hospital" : "refuse";
+    return canVisitHospital(player) && Math.random() < 0.28 ? "hospital" : "refuse";
   }
 
   const allowed = getAllowedActionsForPlayer(playerId);
@@ -2457,7 +2470,7 @@ function chooseSoloTestAction(playerId) {
   const nerve = visibleRisk - visibleSafety - testedDelta - noticeDelta + Math.floor(player.healthAnxiety / 18);
   const heat = player.dissatisfaction - Math.floor(player.healthAnxiety / 2) - (visibleRisk * 7) + (visibleSafety * 5) + (testedDelta * 4);
 
-  if (nerve >= 4 && Math.random() < 0.45) {
+  if (nerve >= 4 && canVisitHospital(player) && Math.random() < 0.45) {
     return "hospital";
   }
   if (nerve >= 3 && Math.random() < 0.62) {
@@ -2736,7 +2749,11 @@ function getAllowedActionsForPlayer(playerId) {
   }
 
   const locks = getActionLocksForPlayer(playerId);
-  return GAME_CONFIG.actionOrder.filter((actionKey) => !locks[actionKey]);
+  const player = room.players[playerId];
+  return GAME_CONFIG.actionOrder.filter((actionKey) => (
+    !locks[actionKey]
+    && (actionKey !== "hospital" || canVisitHospital(player))
+  ));
 }
 
 function handleChatReveal() {
@@ -2847,6 +2864,10 @@ function hostReceiveAction(playerId, actionKey) {
 
   const partnerId = room.round.pairMap[playerId];
   if (actionKey === "hospital") {
+    if (!canVisitHospital(room.players[playerId])) {
+      sendActionRejected(playerId, "醫院整晚只能去一次，你剛剛已經驗過了。");
+      return;
+    }
     room.round.submissions[playerId] = "hospital";
     sendPrivateToast(playerId, `你選了：${ACTIONS.hospital.shortLabel}`);
     if (allRoundActionsSubmitted()) {
@@ -2938,13 +2959,17 @@ function resolveHostedRound() {
             ? "你這局雖然放空，還是跑去醫院驗了一下，結果是你真的中獎了。"
             : "你這局雖然放空，還是跑去醫院驗了一下，結果目前還安全。",
           chips: [{ label: player.isInfected ? "真的中獎" : "目前安全", kind: player.isInfected ? "bad" : "good" }],
-          notes: ["醫院讓焦慮得病值歸零，但欲求不滿值會往上跑。"]
+          notes: [
+            "醫院讓焦慮得病值歸零，但欲求不滿值會往上跑；今晚的醫院機會也用掉了。",
+            ...(player.isInfected ? ["你已經知道自己陽性；後面還能繼續互動，感染也還能往下傳。"] : [])
+          ]
         };
         return;
       }
+      applyRefuse(player);
       privateSummaries[playerId] = {
         title: `第 ${room.roundIndex} 局翻牌`,
-        body: "你這局剛好空窗，什麼都沒發生。",
+        body: "你這局剛好空窗，什麼都沒發生，欲求不滿值也往上跑。",
         chips: [{ label: "放空一局", kind: "warn" }],
         notes: ["空窗局不會逼你出牌，但也刷不到親密次數。"]
       };
@@ -3087,7 +3112,10 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
       ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
       : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     leftSummary.chips.push({ label: left.isInfected ? "真的中獎" : "目前安全", kind: left.isInfected ? "bad" : "good" });
-    leftSummary.notes.push("醫院讓焦慮得病值歸零，但欲求不滿值會往上跑。");
+    leftSummary.notes.push("醫院讓焦慮得病值歸零，但欲求不滿值會往上跑；今晚的醫院機會也用掉了。");
+    if (left.isInfected) {
+      leftSummary.notes.push("你已經知道自己陽性；後面還能繼續互動，感染也還能往下傳。");
+    }
   }
 
   if (!forcedRawSex && rightActionKey === "hospital") {
@@ -3097,7 +3125,10 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
       ? "你這局衝去醫院，翻牌答案是：你真的中獎了。"
       : "你這局衝去醫院，翻牌答案是：你目前還安全。";
     rightSummary.chips.push({ label: right.isInfected ? "真的中獎" : "目前安全", kind: right.isInfected ? "bad" : "good" });
-    rightSummary.notes.push("醫院讓焦慮得病值歸零，但欲求不滿值會往上跑。");
+    rightSummary.notes.push("醫院讓焦慮得病值歸零，但欲求不滿值會往上跑；今晚的醫院機會也用掉了。");
+    if (right.isInfected) {
+      rightSummary.notes.push("你已經知道自己陽性；後面還能繼續互動，感染也還能往下傳。");
+    }
   }
 
   const leftIntimacy = forcedRawSex || isIntimacyAction(leftActionKey);
@@ -3170,8 +3201,11 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     applyIntimacy(left, resolvedActionKey, leftPartnerWasInfected);
     applyIntimacy(right, resolvedActionKey, rightPartnerWasInfected);
 
-    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。欲求不滿降了一點，焦慮得病值也跟著往上跑。`;
-    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。欲求不滿降了一點，焦慮得病值也跟著往上跑。`;
+    const meterResult = resolvedAction.condom
+      ? "有戴套，欲求不滿值小幅上升，焦慮得病值只多一點。"
+      : "沒戴套，欲求不滿值降了，但焦慮得病值會飆得很快。";
+    leftSummary.body = `你和 ${right.name} 最後真的演到「${resolvedAction.shortLabel}」。${meterResult}`;
+    rightSummary.body = `你和 ${left.name} 最後真的演到「${resolvedAction.shortLabel}」。${meterResult}`;
     leftSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
     rightSummary.chips.push({ label: resolvedAction.shortLabel, kind: resolvedAction.condom ? "good" : "warn" });
 
@@ -3215,14 +3249,14 @@ function resolvePair(leftId, rightId, leftActionKey, rightActionKey, roundIndex)
     }
 
     if (!leftInfectedBefore && left.isInfected && !left.detectedSelf) {
-      leftSummary.notes.push("剛中招不一定有感覺；想翻答案，去醫院。");
+      leftSummary.notes.push("剛中招不一定有感覺；如果還沒用掉那次機會，可以去醫院翻答案。");
     } else if (leftPartnerWasInfected && !left.isInfected) {
       left.stats.closeCalls += 1;
       leftSummary.notes.push("這波其實擦身得很驚險，但你暫時還沒看到明顯異狀。");
     }
 
     if (!rightInfectedBefore && right.isInfected && !right.detectedSelf) {
-      rightSummary.notes.push("剛中招不一定有感覺；想翻答案，去醫院。");
+      rightSummary.notes.push("剛中招不一定有感覺；如果還沒用掉那次機會，可以去醫院翻答案。");
     } else if (rightPartnerWasInfected && !right.isInfected) {
       right.stats.closeCalls += 1;
       rightSummary.notes.push("這波其實擦身得很驚險，但你暫時還沒看到明顯異狀。");
@@ -3265,6 +3299,9 @@ function resolveSharedAction(leftActionKey, rightActionKey) {
 }
 
 function applyHospital(player) {
+  if (!canVisitHospital(player)) {
+    return false;
+  }
   player.dissatisfaction = clamp(
     player.dissatisfaction + GAME_CONFIG.hospitalDissatisfactionGain,
     0,
@@ -3274,6 +3311,12 @@ function applyHospital(player) {
   player.detectedSelf = true;
   player.detectedInfected = player.isInfected;
   player.stats.hospitals += 1;
+  return true;
+}
+
+function canVisitHospital(player) {
+  return Boolean(player)
+    && (player.stats?.hospitals || 0) < GAME_CONFIG.hospitalVisitLimit;
 }
 
 function applyRefuse(player) {
@@ -3291,7 +3334,11 @@ function applyFailedAttempt(player) {
 
 function applyIntimacy(player, actionKey, partnerWasInfected) {
   const action = ACTIONS[actionKey];
-  player.dissatisfaction = clamp(player.dissatisfaction - action.dissatisfactionRelief, 0, 100);
+  const dissatisfactionDelta = action.dissatisfactionDelta || 0;
+  const nextDissatisfaction = player.dissatisfaction + dissatisfactionDelta;
+  player.dissatisfaction = dissatisfactionDelta > 0
+    ? finalizeDissatisfaction(nextDissatisfaction)
+    : clamp(nextDissatisfaction, 0, 100);
   player.healthAnxiety = finalizeHealthAnxiety(player.healthAnxiety + action.healthAnxietyGain);
   player.intimacyCount += 1;
   player.stats.successfulIntimacies += 1;
@@ -3529,7 +3576,7 @@ function calculateSurvivalScore(player) {
     closeCalls: player.stats.closeCalls * 10,
     correctLeaves: player.stats.correctLeaves * 7,
     testkit: player.stats.tests * 5,
-    hospital: Math.min(player.stats.hospitals, 2) * 3,
+    hospital: Math.min(player.stats.hospitals, GAME_CONFIG.hospitalVisitLimit) * 3,
     risky: player.stats.riskyActions * -9,
     transmissions: player.transmissionCount * -10,
     failedCarrierMission: player.isCarrier ? -30 : 0
@@ -3834,6 +3881,19 @@ function sendPrivateToast(playerId, message) {
   const conn = APP.hostConnections.get(playerId);
   if (conn?.open) {
     conn.send({ type: "toast", message });
+  }
+}
+
+function sendActionRejected(playerId, message) {
+  if (playerId === APP.selfId || isLocalTestViewPlayer(playerId)) {
+    clearLocalPendingState();
+    renderPlayerSnapshot();
+    showToast(message);
+    return;
+  }
+  const conn = APP.hostConnections.get(playerId);
+  if (conn?.open) {
+    conn.send({ type: "action-rejected", message });
   }
 }
 

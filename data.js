@@ -10,6 +10,7 @@ const GAME_CONFIG = {
   roundDurationMs: 45 * 1000,
   startDissatisfaction: 0,
   startHealthAnxiety: 0,
+  hospitalVisitLimit: 1,
   hospitalDissatisfactionGain: 10,
   refuseDissatisfactionGain: 16,
   failedAttemptDissatisfactionGain: 20,
@@ -40,7 +41,7 @@ const ACTIONS = {
     shortLabel: "戴套口交",
     category: "oral",
     condom: true,
-    dissatisfactionRelief: 6,
+    dissatisfactionDelta: 3,
     healthAnxietyGain: 2,
     transmissionRisk: 0.05,
     description: "先試水溫，穩穩來不硬衝。"
@@ -51,7 +52,7 @@ const ACTIONS = {
     shortLabel: "戴套性交",
     category: "sex",
     condom: true,
-    dissatisfactionRelief: 10,
+    dissatisfactionDelta: 2,
     healthAnxietyGain: 5,
     transmissionRisk: 0.15,
     description: "中規中矩，但至少還沒把理智丟掉。"
@@ -62,9 +63,9 @@ const ACTIONS = {
     shortLabel: "無套口交",
     category: "oral",
     condom: false,
-    dissatisfactionRelief: 12,
+    dissatisfactionDelta: -12,
     healthAnxietyGain: 15,
-    transmissionRisk: 0.3,
+    transmissionRisk: 0.22,
     description: "當下很敢，事後通常比較會想很多。"
   },
   sex_raw: {
@@ -73,9 +74,9 @@ const ACTIONS = {
     shortLabel: "無套性交",
     category: "sex",
     condom: false,
-    dissatisfactionRelief: 22,
+    dissatisfactionDelta: -22,
     healthAnxietyGain: 30,
-    transmissionRisk: 0.6,
+    transmissionRisk: 0.45,
     description: "這招最猛，也最像在跟命運猜拳。"
   },
   refuse: {
@@ -84,7 +85,7 @@ const ACTIONS = {
     shortLabel: "換一個",
     category: "none",
     condom: false,
-    dissatisfactionRelief: 0,
+    dissatisfactionDelta: 0,
     healthAnxietyGain: 0,
     transmissionRisk: 0,
     description: "不陪了先撤，讓腦袋保住一點。"
@@ -95,10 +96,10 @@ const ACTIONS = {
     shortLabel: "去醫院檢查",
     category: "none",
     condom: false,
-    dissatisfactionRelief: 0,
+    dissatisfactionDelta: 0,
     healthAnxietyGain: 0,
     transmissionRisk: 0,
-    description: "去把腦袋洗清醒，順便看自己有沒有中獎。"
+    description: "整晚只能去一次，焦慮歸零，也會驗出自己有沒有中獎。"
   }
 };
 

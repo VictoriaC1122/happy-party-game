@@ -6,8 +6,8 @@
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
   <link rel="stylesheet" href="./styles.css?v=20260815d">
-  <script defer src="./data.js?v=20260815c"></script>
-  <script defer src="./app.js?v=20260815h"></script>
+  <script defer src="./data.js?v=20260815d"></script>
+  <script defer src="./app.js?v=20260815i"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -188,18 +188,19 @@
               <ul>
                 <li><strong>45 秒</strong>內可以先聊天、偷測，再選親密互動或「換一個」。</li>
                 <li>親密互動要<strong>雙方都選</strong>才成立；任何一人換人或去醫院，這晚就不會發生。</li>
-                <li>每人整晚只有 <strong>1 次偷測</strong>；醫院不限次數，但會用掉這晚。</li>
+                <li>每人整晚只有 <strong>1 次偷測</strong>、<strong>1 次去醫院</strong>的機會；去醫院會用掉這晚。</li>
                 <li>時間到還沒選，系統直接當作「換一個」。</li>
               </ul>
             </section>
             <section class="game-guide-block">
               <span class="game-guide-index">03</span>
-              <h4>第 2 晚開始鬧</h4>
+              <h4>兩個數值</h4>
               <ul>
-                <li>第 1 晚沒有亂入事件；第 2 晚起，欲求不滿值達 <strong>25%</strong> 就可能失控，觸發率最高 70%。</li>
-                <li>「沒得選，我就是要做」會強制無套性交；「你不想」會鎖住兩個戴套選項。</li>
-                <li>「對方偷偷戳破套子」會在翻牌時，把戴套改判成無套。</li>
-                <li>焦慮得病值每 25% 少看一條線索；到 <strong>80%</strong> 就聊不出資訊。</li>
+                <li><strong>欲求不滿值</strong>：戴套太多，或這晚根本沒做，數值就會往上。</li>
+                <li>第 2 晚起，達 25% 後可能觸發特定事件：你自己不想戴，兩個戴套選項會被鎖住；也可能直接失控成無套性交。</li>
+                <li><strong>焦慮得病值</strong>：無套會飆得很快。越焦慮，看得到的線索越少；到 80% 就無法好好聊天，套不出對方的風險。</li>
+                <li>整晚只能去醫院一次。醫院會讓焦慮歸零，也會驗出自己有沒有感染。</li>
+                <li>驗出陽性也不會出局；後面照樣能選無套，把感染繼續往下傳。</li>
               </ul>
             </section>
             <section class="game-guide-block">
@@ -292,16 +293,16 @@
               <ul>
                 <li>每晚 <strong>45 秒</strong>；雙方都選親密互動才成立。</li>
                 <li>任何一人換人或去醫院，這晚就不會發生。時間到沒選，默認「換一個」。</li>
-                <li>每人只有 <strong>1 次偷測</strong>；醫院不限次數。</li>
+                <li>每人只有 <strong>1 次偷測</strong>、<strong>1 次去醫院</strong>的機會。</li>
               </ul>
             </section>
             <section class="game-guide-block">
               <span class="game-guide-index">03</span>
-              <h4>第 2 晚起可能失控</h4>
+              <h4>兩個數值</h4>
               <ul>
-                <li>欲求不滿值達 <strong>25%</strong> 就可能強制無套，或鎖住戴套選項。</li>
-                <li>偷戳套子會把戴套改判成無套；焦慮得病值越高，看得到的線索越少。</li>
-                <li>帶原者無套性交成功 2 次後，會開始提高對方戴套選項被鎖的機率。</li>
+                <li><strong>欲求不滿值</strong>：戴套太多，或這晚沒做，數值會上升。高起來就可能觸發失控，連你自己都不想戴，戴套選項會被鎖住。</li>
+                <li><strong>焦慮得病值</strong>：無套會飆得很快；太焦慮就無法好好聊天，套不出對方有沒有感染風險。</li>
+                <li>醫院只能去一次，會讓焦慮歸零，並驗出自己有沒有感染。驗出陽性後，仍然可以繼續無套，把感染傳下去。</li>
               </ul>
             </section>
             <section class="game-guide-block">
@@ -354,13 +355,13 @@
           <span>欲求不滿值</span>
           <strong id="dissatisfaction-value">0%</strong>
           <div class="meter"><div id="dissatisfaction-bar" class="meter-fill dissatisfaction-fill"></div></div>
-          <small class="stat-hint">第 2 局起，超過 25% 就可能失控。越高，越容易強制無套或不想戴。</small>
+          <small class="stat-hint">戴套太多或這晚沒做會上升；高起來可能鎖住戴套選項，甚至強制無套。</small>
         </article>
         <article class="stat-card">
           <span>焦慮得病值</span>
           <strong id="health-anxiety-value">0%</strong>
           <div class="meter"><div id="health-anxiety-bar" class="meter-fill health-anxiety-fill"></div></div>
-          <small class="stat-hint">每多 25%，少看一條線索；衝到 80%，連話都套不出來。</small>
+          <small class="stat-hint">無套會飆得很快；80% 起聊不出線索。醫院只能去一次，會驗出自己有沒有感染。</small>
         </article>
         <article class="stat-card mini">
           <span>親密次數</span>
@@ -390,7 +391,7 @@
           <div class="partner-tools">
             <button id="chat-btn" class="secondary-btn slim-btn">💬 先聊天刺探一下</button>
             <button id="test-btn" class="secondary-btn slim-btn">🧪 偷測一下</button>
-            <button id="hospital-btn" class="ghost-btn slim-btn">🏥 去驗一下</button>
+            <button id="hospital-btn" class="ghost-btn slim-btn">🏥 去驗一下（剩 1 次）</button>
           </div>
         </article>
 
