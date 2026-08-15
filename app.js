@@ -274,6 +274,7 @@ function cacheDom() {
     testExitBtn: document.getElementById("test-exit-btn"),
     testLabPill: document.getElementById("test-lab-pill"),
     testViewSelect: document.getElementById("test-view-select"),
+    testFillBotsBtn: document.getElementById("test-fill-bots-btn"),
     testHostViewBtn: document.getElementById("test-host-view-btn"),
     testCarrierBtn: document.getElementById("test-carrier-btn"),
     testAdvanceBtn: document.getElementById("test-advance-btn"),
@@ -390,6 +391,7 @@ function bindDomEvents() {
   APP.dom.joinForm.addEventListener("submit", handleJoinSubmit);
   APP.dom.copyLinkBtn.addEventListener("click", copyJoinLink);
   APP.dom.startGameBtn.addEventListener("click", startHostedGame);
+  APP.dom.testFillBotsBtn.addEventListener("click", fillTestRoomWithBots);
   APP.dom.chatBtn.addEventListener("click", handleChatReveal);
   APP.dom.testBtn.addEventListener("click", handleUseTestkit);
   APP.dom.hospitalBtn.addEventListener("click", () => submitAction("hospital"));
@@ -1013,6 +1015,8 @@ function syncTestLab() {
   const viewerId = getHostViewPlayerId();
   const viewer = room.players[viewerId] || room.players[room.hostId];
   const carrierPreview = APP.testCarrierPreviewActive && viewer?.isCarrier ? viewer : null;
+  const playersNeeded = Math.max(0, GAME_CONFIG.minPlayers - activeLobbyPlayers(room).length);
+  const botsToAdd = getTestBotFillCount(room);
   const optionsFragment = document.createDocumentFragment();
 
   players.forEach((player) => {
@@ -1031,6 +1035,11 @@ function syncTestLab() {
     APP.dom.testLabPill.textContent = `帶原者：${carrierPreview.name}`;
   }
   APP.dom.testHostViewBtn.disabled = viewer?.isHost ?? true;
+  APP.dom.testFillBotsBtn.classList.toggle("hidden", room.phase !== "lobby");
+  APP.dom.testFillBotsBtn.disabled = botsToAdd === 0;
+  APP.dom.testFillBotsBtn.textContent = botsToAdd > 0
+    ? `叫 ${botsToAdd} 個電腦分身`
+    : (playersNeeded > 0 ? "座位滿了，等手機接回來" : "人數已經夠了");
   APP.dom.testCarrierBtn.disabled = !(room.initialCarrierIds || []).length;
   APP.dom.testCarrierBtn.textContent = carrierPreview ? "換下一位帶原者" : "偷看帶原者";
   APP.dom.testAdvanceBtn.classList.toggle("hidden", !(room.phase === "summary" && !viewer?.isHost));
@@ -1300,15 +1309,12 @@ function attemptCreateHostPeer(profile, attempts, testMode = false) {
     APP.roomCode = roomCode;
     APP.hostPeerId = hostPeerId;
     APP.hostRoom = createHostRoom(profile, testMode);
-    if (testMode) {
-      ensureSoloTestPlayers(APP.hostRoom);
-    }
     wireHostPeer(peer);
     startHostHeartbeat();
     hostSyncAll({ immediate: true });
     switchScreen("lobby-screen");
     showToast(testMode
-      ? "測試分身到齊了，想掃碼就掃，想開局就按開始。"
+      ? "測試桌開好啦。手機先掃碼，人不夠再叫電腦分身。"
       : "正式桌開好啦，快把掃碼圖丟出去抓人。");
   });
 
@@ -1344,6 +1350,7 @@ function createHostRoom(profile, testMode = false) {
     roomCode: APP.roomCode,
     testMode: Boolean(testMode),
     testBotIds: [],
+    gamePlayerIds: [],
     replayArchive: [],
     phase: "lobby",
     roundIndex: 0,
@@ -1643,6 +1650,15 @@ function handleHostMessage(conn, packet) {
     const existingPlayer = findPlayerBySessionId(room, requestedSessionId) || directPlayer;
     if (existingPlayer) {
       const playerId = existingPlayer.id;
+      if (
+        room.phase !== "lobby"
+        && room.gamePlayerIds?.length
+        && !room.gamePlayerIds.includes(playerId)
+      ) {
+        conn.send({ type: "join-rejected", reason: "這局開始時你不在桌上，下桌再來。" });
+        conn.close();
+        return;
+      }
       clearHostDisconnectTimer(playerId);
       bindHostConnection(playerId, conn);
       APP.lastSentSnapshotKeys.delete(playerId);
@@ -1767,7 +1783,9 @@ function activeLobbyPlayers(room) {
 }
 
 function getGamePlayerIds(room) {
-  return Object.keys(room.players);
+  return room.gamePlayerIds?.length
+    ? room.gamePlayerIds.filter((playerId) => Boolean(room.players[playerId]))
+    : Object.keys(room.players);
 }
 
 function hostSyncAll(options = {}) {
@@ -2041,7 +2059,9 @@ function renderLobby(snapshot) {
   APP.dom.lobbyScreen.classList.toggle("test-lobby", isTestLobby);
   APP.dom.lobbyEyebrow.textContent = isTestLobby ? "測試遊玩" : "正式遊玩";
   APP.dom.lobbyTitle.textContent = isTestLobby
-    ? (isHostLobby ? "分身到齊，隨時可以開始" : "你進到測試桌了")
+    ? (isHostLobby
+        ? (playersNeeded ? "手機先掃碼，人不夠再叫分身" : "人齊啦，測試隨時可以開始")
+        : "你進到測試桌了")
     : (isHostLobby ? "掃碼加入，名字立刻上牆" : "你已經連上主持人");
   APP.dom.phasePill.textContent = isHostLobby
     ? `${onlineCount} 人在線`
@@ -2051,7 +2071,7 @@ function renderLobby(snapshot) {
   APP.dom.playerCountDisplay.textContent = String(onlineCount);
   APP.dom.startGameBtn.disabled = !snapshot.canStart;
   APP.dom.startGameBtn.textContent = isTestLobby
-    ? "開始單人測試"
+    ? (playersNeeded ? `再差 ${playersNeeded} 人` : "開始測試")
     : (playersNeeded ? `再等 ${playersNeeded} 人` : "人齊，開始遊戲");
   APP.dom.hostControls.classList.toggle("hidden", snapshot.role !== "host");
 
@@ -2487,10 +2507,21 @@ function createTestBotProfile(index) {
   };
 }
 
+function getTestBotFillCount(room) {
+  if (!room?.testMode || room.phase !== "lobby") {
+    return 0;
+  }
+  const playersNeeded = Math.max(0, GAME_CONFIG.minPlayers - activeLobbyPlayers(room).length);
+  const availableSeats = Math.max(0, GAME_CONFIG.maxPlayers - Object.keys(room.players).length);
+  return Math.min(playersNeeded, availableSeats);
+}
+
 function ensureSoloTestPlayers(room) {
-  room.testMode = true;
+  if (!room?.testMode || room.phase !== "lobby") {
+    return 0;
+  }
   room.testBotIds = room.testBotIds || [];
-  const neededCount = Math.max(0, GAME_CONFIG.minPlayers - activeLobbyPlayers(room).length);
+  const neededCount = getTestBotFillCount(room);
 
   for (let index = 0; index < neededCount; index += 1) {
     const botNumber = room.testBotIds.length + 1;
@@ -2501,6 +2532,20 @@ function ensureSoloTestPlayers(room) {
     room.players[botId] = bot;
     room.testBotIds.push(botId);
   }
+  return neededCount;
+}
+
+function fillTestRoomWithBots() {
+  const room = APP.hostRoom;
+  if (APP.role !== "host" || !room?.testMode || room.phase !== "lobby") {
+    return;
+  }
+
+  const addedCount = ensureSoloTestPlayers(room);
+  hostSyncAll({ immediate: true });
+  showToast(addedCount > 0
+    ? `叫來 ${addedCount} 個電腦分身，現在可以開局啦。`
+    : "人數已經夠了，不用再叫分身。");
 }
 
 function startHostedGame() {
@@ -2516,6 +2561,15 @@ function startHostedGame() {
   }
 
   const activeIds = lobbyPlayers.map((player) => player.id);
+  Object.keys(room.players).forEach((playerId) => {
+    if (activeIds.includes(playerId)) {
+      return;
+    }
+    clearHostDisconnectTimer(playerId);
+    APP.lastSentSnapshotKeys.delete(playerId);
+    delete room.players[playerId];
+  });
+  room.gamePlayerIds = activeIds.slice();
   const shuffledIds = shuffle(activeIds);
   room.initialCarrierIds = shuffledIds.slice(0, Math.min(GAME_CONFIG.initialCarrierCount, shuffledIds.length));
   room.pairSchedule = [];
@@ -4117,7 +4171,7 @@ function setCreateRoomBusy(isBusy, mode = "") {
   APP.dom.createRoomBtn.disabled = isBusy;
   APP.dom.createTestRoomBtn.disabled = isBusy;
   APP.dom.createRoomBtn.textContent = isBusy && mode === "formal" ? "正在開正式桌…" : "我要開一桌";
-  APP.dom.createTestRoomBtn.textContent = isBusy && mode === "test" ? "正在開測試桌…" : "進入單人測試";
+  APP.dom.createTestRoomBtn.textContent = isBusy && mode === "test" ? "正在開測試桌…" : "進入測試房";
 }
 
 function startJoinAttemptTimeout() {
