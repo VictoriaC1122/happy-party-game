@@ -4,32 +4,29 @@ const PLAYER_SESSIONS_KEY = "happy-party-player-sessions-v1";
 const HOST_PEER_PREFIX = "happy-party-host-";
 const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
 const HOST_HEARTBEAT_MS = 5000;
-const LOBBY_DISCONNECT_GRACE_MS = 18000;
-const PLAYER_CONNECTION_STALE_MS = 18000;
+const LOBBY_DISCONNECT_GRACE_MS = 90000;
+const PLAYER_CONNECTION_STALE_MS = 40000;
 const PEER_OPEN_TIMEOUT_MS = 12000;
-const PLAYER_RECONNECT_DELAYS_MS = [900, 1600, 2600, 4200, 6000, 8200];
+const DATA_CHANNEL_DISCONNECT_GRACE_MS = 5000;
+const HOST_PEER_RECOVERY_DELAYS_MS = [800, 1600, 3000, 5000, 8000];
+const PLAYER_RECONNECT_DELAYS_MS = [600, 1200, 2200, 3500, 5000, 7000, 10000];
 const SCRIPT_SOURCES = {
   peer: "./vendor/peerjs.min.js?v=20260814a",
   qr: "./vendor/qrcode.min.js?v=20260814b"
 };
-const DEFAULT_ICE_SERVERS = [
-  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+const BASE_ICE_SERVERS = [
   {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject"
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject"
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject"
+    urls: [
+      "stun:stun.l.google.com:19302",
+      "stun:stun1.l.google.com:19302",
+      "stun:global.stun.twilio.com:3478"
+    ]
   }
 ];
+const OPEN_RELAY_HOST = "staticauth.openrelay.metered.ca";
+const OPEN_RELAY_SECRET = "openrelayprojectsecret";
+let resolvedDefaultIceServers = BASE_ICE_SERVERS;
+let defaultIceServerLoad = null;
 const SCRIPT_LOADS = new Map();
 const TEST_BOT_NAMES = [
   "陪測分身阿酒",
@@ -60,6 +57,10 @@ const APP = {
   playerReconnectAttempts: 0,
   playerReconnectActive: false,
   playerWatchdogTimer: null,
+  hostPeerRecoveryTimer: null,
+  hostPeerRecoveryAttempts: 0,
+  hostPeerRegistered: false,
+  connectionHealthTimers: new WeakMap(),
   lastHostPacketAt: 0,
   queuedSnapshot: null,
   actionButtonNodes: [],
@@ -249,16 +250,70 @@ function loadGlobalScript(key, globalName) {
 }
 
 function ensurePeerLibrary() {
-  return loadGlobalScript("peer", "Peer");
+  return Promise.all([
+    loadGlobalScript("peer", "Peer"),
+    ensureDefaultIceServers()
+  ]).then(([PeerClient]) => PeerClient);
+}
+
+function configuredIceServers() {
+  return Array.isArray(window.HAPPY_PARTY_ICE_SERVERS)
+    ? window.HAPPY_PARTY_ICE_SERVERS.filter((server) => server && server.urls)
+    : [];
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function ensureDefaultIceServers() {
+  const configured = configuredIceServers();
+  if (configured.length) {
+    resolvedDefaultIceServers = configured;
+    return Promise.resolve(resolvedDefaultIceServers);
+  }
+  if (defaultIceServerLoad) {
+    return defaultIceServerLoad;
+  }
+
+  defaultIceServerLoad = (async () => {
+    if (!globalThis.crypto?.subtle || typeof TextEncoder === "undefined") {
+      return BASE_ICE_SERVERS;
+    }
+    const username = `${Math.floor(Date.now() / 1000) + 24 * 60 * 60}:happy-party`;
+    const encoder = new TextEncoder();
+    const key = await globalThis.crypto.subtle.importKey(
+      "raw",
+      encoder.encode(OPEN_RELAY_SECRET),
+      { name: "HMAC", hash: "SHA-1" },
+      false,
+      ["sign"]
+    );
+    const signature = await globalThis.crypto.subtle.sign("HMAC", key, encoder.encode(username));
+    const credential = bytesToBase64(new Uint8Array(signature));
+    const relayCredentials = { username, credential };
+    return [
+      ...BASE_ICE_SERVERS,
+      { urls: `turn:${OPEN_RELAY_HOST}:80`, ...relayCredentials },
+      { urls: `turn:${OPEN_RELAY_HOST}:443`, ...relayCredentials },
+      { urls: `turn:${OPEN_RELAY_HOST}:443?transport=tcp`, ...relayCredentials }
+    ];
+  })()
+    .catch(() => BASE_ICE_SERVERS)
+    .then((iceServers) => {
+      resolvedDefaultIceServers = iceServers;
+      return iceServers;
+    });
+  return defaultIceServerLoad;
 }
 
 function createPeerClient(id) {
-  const configuredIceServers = Array.isArray(window.HAPPY_PARTY_ICE_SERVERS)
-    ? window.HAPPY_PARTY_ICE_SERVERS.filter((server) => server && server.urls)
-    : [];
-  const iceServers = configuredIceServers.length
-    ? configuredIceServers
-    : DEFAULT_ICE_SERVERS;
+  const configured = configuredIceServers();
+  const iceServers = configured.length ? configured : resolvedDefaultIceServers;
   return new Peer(id, {
     pingInterval: 4000,
     config: {
@@ -787,6 +842,215 @@ function stopPlayerReconnectLoop({ preserveProfile = true } = {}) {
   }
 }
 
+function clearConnectionHealthTimer(conn) {
+  const timerId = APP.connectionHealthTimers.get(conn);
+  if (timerId) {
+    clearTimeout(timerId);
+    APP.connectionHealthTimers.delete(conn);
+  }
+}
+
+function watchDataConnectionHealth(conn, onUnhealthy) {
+  const peerConnection = conn?.peerConnection;
+  if (!peerConnection?.addEventListener) {
+    return;
+  }
+  let handled = false;
+  const fail = () => {
+    if (handled) {
+      return;
+    }
+    handled = true;
+    clearConnectionHealthTimer(conn);
+    onUnhealthy();
+  };
+  const check = () => {
+    const connectionState = peerConnection.connectionState;
+    const iceState = peerConnection.iceConnectionState;
+    if (connectionState === "failed" || iceState === "failed") {
+      fail();
+      return;
+    }
+    if (connectionState === "disconnected" || iceState === "disconnected") {
+      if (!APP.connectionHealthTimers.has(conn)) {
+        const timerId = setTimeout(() => {
+          APP.connectionHealthTimers.delete(conn);
+          const stillDisconnected = peerConnection.connectionState === "disconnected"
+            || peerConnection.iceConnectionState === "disconnected";
+          if (stillDisconnected) {
+            fail();
+            return;
+          }
+          check();
+        }, DATA_CHANNEL_DISCONNECT_GRACE_MS);
+        APP.connectionHealthTimers.set(conn, timerId);
+      }
+      return;
+    }
+    clearConnectionHealthTimer(conn);
+  };
+  peerConnection.addEventListener("connectionstatechange", check);
+  peerConnection.addEventListener("iceconnectionstatechange", check);
+  conn.on("close", () => clearConnectionHealthTimer(conn));
+}
+
+function sendConnectionPacket(conn, packet, { trustOpenEvent = false } = {}) {
+  if (!conn || (!conn.open && !trustOpenEvent)) {
+    return false;
+  }
+  try {
+    conn.send(packet);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function sendHostPacket(playerId, packet, conn = APP.hostConnections.get(playerId)) {
+  if (sendConnectionPacket(conn, packet)) {
+    return true;
+  }
+  setTimeout(() => {
+    handleHostDisconnect(playerId, conn);
+    try {
+      conn?.close();
+    } catch (error) {
+      // The phone reconnect loop will replace a channel that is already gone.
+    }
+  }, 0);
+  return false;
+}
+
+function sendPlayerPacket(packet, reconnectMessage, options = {}) {
+  const conn = APP.hostConn;
+  if (sendConnectionPacket(conn, packet, options)) {
+    return true;
+  }
+  if (conn) {
+    handlePlayerConnectionDropped(conn, reconnectMessage);
+    try {
+      conn.close();
+    } catch (error) {
+      // Reconnection does not depend on the stale channel closing cleanly.
+    }
+  } else {
+    schedulePlayerReconnect(reconnectMessage);
+  }
+  return false;
+}
+
+function stopHostPeerRecovery() {
+  clearTimeout(APP.hostPeerRecoveryTimer);
+  APP.hostPeerRecoveryTimer = null;
+  APP.hostPeerRecoveryAttempts = 0;
+}
+
+function hostPeerRecovered(peer) {
+  if (APP.peer !== peer || APP.role !== "host") {
+    return;
+  }
+  APP.hostPeerRegistered = true;
+  const wasRecovering = Boolean(APP.hostPeerRecoveryTimer || APP.hostPeerRecoveryAttempts);
+  stopHostPeerRecovery();
+  startHostHeartbeat();
+  hostSyncAll({ immediate: true });
+  if (wasRecovering) {
+    showToast("主揪訊號接回來了，房號和整桌進度都還在。");
+  }
+}
+
+function rebuildHostPeer(expectedPeer) {
+  if (APP.peer !== expectedPeer || APP.role !== "host" || !APP.hostRoom || !APP.hostPeerId) {
+    return;
+  }
+  try {
+    expectedPeer.destroy();
+  } catch (error) {
+    // A replacement with the same room id is created below either way.
+  }
+
+  const replacement = createPeerClient(APP.hostPeerId);
+  APP.peer = replacement;
+  APP.hostPeerRegistered = false;
+  wireHostPeer(replacement);
+  let opened = false;
+  const openTimer = setTimeout(() => {
+    if (opened || APP.peer !== replacement || APP.role !== "host") {
+      return;
+    }
+    try {
+      replacement.destroy();
+    } catch (error) {
+      // The next recovery attempt gets another fresh Peer object.
+    }
+    scheduleHostPeerRecovery(replacement);
+  }, PEER_OPEN_TIMEOUT_MS);
+
+  replacement.on("open", () => {
+    if (APP.peer !== replacement || APP.role !== "host") {
+      return;
+    }
+    opened = true;
+    clearTimeout(openTimer);
+    APP.hostPeerRegistered = true;
+    hostPeerRecovered(replacement);
+  });
+  replacement.on("disconnected", () => handleHostPeerDisconnected(replacement));
+  replacement.on("error", () => {
+    clearTimeout(openTimer);
+    if (APP.peer !== replacement || APP.role !== "host") {
+      return;
+    }
+    APP.hostPeerRegistered = false;
+    try {
+      replacement.destroy();
+    } catch (error) {
+      // The recovery timer below will still attempt a fresh host peer.
+    }
+    scheduleHostPeerRecovery(replacement);
+  });
+}
+
+function scheduleHostPeerRecovery(peer) {
+  if (APP.peer !== peer || APP.role !== "host" || !APP.hostRoom || APP.hostPeerRecoveryTimer) {
+    return;
+  }
+  const delayIndex = Math.min(
+    APP.hostPeerRecoveryAttempts,
+    HOST_PEER_RECOVERY_DELAYS_MS.length - 1
+  );
+  APP.hostPeerRecoveryTimer = setTimeout(() => {
+    APP.hostPeerRecoveryTimer = null;
+    if (APP.peer !== peer || APP.role !== "host" || !APP.hostRoom) {
+      return;
+    }
+    if (APP.hostPeerRegistered && !peer.destroyed && !peer.disconnected) {
+      hostPeerRecovered(peer);
+      return;
+    }
+    APP.hostPeerRecoveryAttempts += 1;
+    if (peer.destroyed) {
+      rebuildHostPeer(peer);
+      return;
+    }
+    if (!peer.disconnected) {
+      if (APP.hostPeerRecoveryAttempts >= HOST_PEER_RECOVERY_DELAYS_MS.length) {
+        rebuildHostPeer(peer);
+        return;
+      }
+      scheduleHostPeerRecovery(peer);
+      return;
+    }
+    try {
+      peer.reconnect();
+    } catch (error) {
+      rebuildHostPeer(peer);
+      return;
+    }
+    scheduleHostPeerRecovery(peer);
+  }, HOST_PEER_RECOVERY_DELAYS_MS[delayIndex]);
+}
+
 function clearHostDisconnectTimer(playerId) {
   const timerId = APP.hostDisconnectTimers.get(playerId);
   if (!timerId) {
@@ -823,7 +1087,7 @@ function startHostHeartbeat() {
     }
     APP.hostConnections.forEach((conn, playerId) => {
       if (conn?.open && APP.hostRoom.players[playerId]) {
-        conn.send({ type: "heartbeat", at: Date.now() });
+        sendHostPacket(playerId, { type: "heartbeat", at: Date.now() }, conn);
       }
     });
   }, HOST_HEARTBEAT_MS);
@@ -888,14 +1152,16 @@ function handleHostPeerDisconnected(peer) {
   if (APP.peer !== peer || APP.role !== "host") {
     return;
   }
+  APP.hostPeerRegistered = false;
   showToast("主揪訊號晃了一下，我正在幫你拉回來。");
-  if (typeof peer.reconnect === "function") {
+  if (!peer.destroyed && peer.disconnected && typeof peer.reconnect === "function") {
     try {
       peer.reconnect();
     } catch (error) {
-      // Ignore reconnect errors and wait for the next retry path.
+      // The scheduled recovery below will rebuild the host peer if needed.
     }
   }
+  scheduleHostPeerRecovery(peer);
 }
 
 function fallbackToJoinScreen(message) {
@@ -1319,7 +1585,11 @@ function attemptCreateHostPeer(profile, attempts, testMode = false) {
   }, PEER_OPEN_TIMEOUT_MS);
 
   peer.on("open", (id) => {
-    if (abandoned || initialized) {
+    if (abandoned) {
+      return;
+    }
+    if (initialized) {
+      hostPeerRecovered(peer);
       return;
     }
     initialized = true;
@@ -1327,6 +1597,7 @@ function attemptCreateHostPeer(profile, attempts, testMode = false) {
     setCreateRoomBusy(false);
     APP.role = "host";
     APP.peer = peer;
+    APP.hostPeerRegistered = true;
     APP.selfId = id;
     APP.roomCode = roomCode;
     APP.hostPeerId = hostPeerId;
@@ -1417,6 +1688,9 @@ function bindHostConnection(playerId, conn) {
 function wireHostPeer(peer) {
   peer.on("connection", (conn) => {
     conn.on("open", () => {
+      watchDataConnectionHealth(conn, () => {
+        handleHostDisconnect(getHostConnectionPlayerId(conn), conn);
+      });
       conn.on("data", (data) => handleHostMessage(conn, data));
       conn.on("close", () => handleHostDisconnect(getHostConnectionPlayerId(conn), conn));
       conn.on("error", () => handleHostDisconnect(getHostConnectionPlayerId(conn), conn));
@@ -1614,6 +1888,9 @@ function wirePlayerPeer(profile, options = {}) {
   APP.hostConn = conn;
   APP.lastHostPacketAt = Date.now();
   startJoinAttemptTimeout();
+  watchDataConnectionHealth(conn, () => {
+    handlePlayerConnectionDropped(conn, "手機網路換了一條，我正在幫你接回主揪。");
+  });
 
   conn.on("open", () => {
     APP.lastHostPacketAt = Date.now();
@@ -1622,7 +1899,7 @@ function wirePlayerPeer(profile, options = {}) {
       renderJoiningLobby(profile, APP.roomCode, options.isReconnect ? "重新對暗號" : "等主揪點頭");
     }
     startJoinAttemptTimeout();
-    conn.send({
+    sendPlayerPacket({
       type: "join-request",
       payload: {
         name: profile.name,
@@ -1630,7 +1907,7 @@ function wirePlayerPeer(profile, options = {}) {
         sessionId: APP.playerSessionId,
         reconnecting: Boolean(options.isReconnect)
       }
-    });
+    }, "進場暗號沒送到，我正在重新接主揪。", { trustOpenEvent: true });
   });
 
   conn.on("data", handlePlayerMessage);
@@ -1650,7 +1927,7 @@ function handleHostMessage(conn, packet) {
   if (packet.type === "join-request") {
     const room = APP.hostRoom;
     if (!room) {
-      conn.send({ type: "join-rejected", reason: "主揪這桌剛剛收起來了。" });
+      sendConnectionPacket(conn, { type: "join-rejected", reason: "主揪這桌剛剛收起來了。" });
       conn.close();
       return;
     }
@@ -1664,7 +1941,7 @@ function handleHostMessage(conn, packet) {
       && requestedSessionId
       && directPlayer.sessionId !== requestedSessionId
     ) {
-      conn.send({ type: "join-rejected", reason: "這個座位的手機憑證對不上，重新掃一次 QR Code。" });
+      sendConnectionPacket(conn, { type: "join-rejected", reason: "這個座位的手機憑證對不上，重新掃一次 QR Code。" });
       conn.close();
       return;
     }
@@ -1677,7 +1954,7 @@ function handleHostMessage(conn, packet) {
         && room.gamePlayerIds?.length
         && !room.gamePlayerIds.includes(playerId)
       ) {
-        conn.send({ type: "join-rejected", reason: "這局開始時你不在桌上，下桌再來。" });
+        sendConnectionPacket(conn, { type: "join-rejected", reason: "這局開始時你不在桌上，下桌再來。" });
         conn.close();
         return;
       }
@@ -1693,14 +1970,14 @@ function handleHostMessage(conn, packet) {
     }
 
     if (room.phase !== "lobby") {
-      conn.send({ type: "join-rejected", reason: "這桌已經開喝了，這局別硬擠。" });
+      sendConnectionPacket(conn, { type: "join-rejected", reason: "這桌已經開喝了，這局別硬擠。" });
       conn.close();
       return;
     }
 
     const occupiedSeats = Object.keys(room.players).length;
     if (occupiedSeats >= GAME_CONFIG.maxPlayers) {
-      conn.send({ type: "join-rejected", reason: "包廂爆滿啦，真的塞不下。" });
+      sendConnectionPacket(conn, { type: "join-rejected", reason: "包廂爆滿啦，真的塞不下。" });
       conn.close();
       return;
     }
@@ -1751,7 +2028,7 @@ function handleHostDisconnect(playerId, conn = null) {
   if (room.phase === "lobby") {
     scheduleLobbyDisconnectCleanup(playerId);
   }
-  hostSyncAll({ immediate: true });
+  hostSyncAll();
 }
 
 function handlePlayerMessage(packet) {
@@ -1838,11 +2115,13 @@ function flushHostSync() {
       if (APP.lastSentSnapshotKeys.get(playerId) === signature) {
         return;
       }
-      APP.lastSentSnapshotKeys.set(playerId, signature);
-      conn.send({
+      const sent = sendHostPacket(playerId, {
         type: "snapshot",
         snapshot
-      });
+      }, conn);
+      if (sent) {
+        APP.lastSentSnapshotKeys.set(playerId, signature);
+      }
     }
   });
   syncTestLab();
@@ -3291,9 +3570,8 @@ function handleChatReveal() {
   if (APP.localPending.submission || APP.localPending.utility) {
     return;
   }
-  if (APP.hostConn?.open) {
+  if (sendPlayerPacket({ type: "chat-reveal" }, "聊天訊號沒送到，我正在接回主揪。")) {
     setLocalPendingUtility("chat", "正在套話…");
-    APP.hostConn.send({ type: "chat-reveal" });
   }
 }
 
@@ -3333,9 +3611,8 @@ function handleUseTestkit() {
   if (APP.localPending.submission || APP.localPending.utility) {
     return;
   }
-  if (APP.hostConn?.open) {
+  if (sendPlayerPacket({ type: "use-testkit" }, "偷測訊號沒送到，我正在接回主揪。")) {
     setLocalPendingUtility("testkit", "正在偷測…");
-    APP.hostConn.send({ type: "use-testkit" });
   }
 }
 
@@ -3374,9 +3651,8 @@ function submitAction(actionKey) {
   if (APP.localPending.submission || APP.localPending.utility) {
     return;
   }
-  if (APP.hostConn?.open) {
+  if (sendPlayerPacket({ type: "submit-action", action: actionKey }, "你的選擇沒送到，我正在接回主揪。")) {
     setLocalPendingSubmission(actionKey);
-    APP.hostConn.send({ type: "submit-action", action: actionKey });
   }
 }
 
@@ -4411,7 +4687,7 @@ function sendPrivateToast(playerId, message) {
   }
   const conn = APP.hostConnections.get(playerId);
   if (conn?.open) {
-    conn.send({ type: "toast", message });
+    sendHostPacket(playerId, { type: "toast", message }, conn);
   }
 }
 
@@ -4424,7 +4700,7 @@ function sendActionRejected(playerId, message) {
   }
   const conn = APP.hostConnections.get(playerId);
   if (conn?.open) {
-    conn.send({ type: "action-rejected", message });
+    sendHostPacket(playerId, { type: "action-rejected", message }, conn);
   }
 }
 
@@ -4453,9 +4729,11 @@ function exitTestMode() {
 
 function destroyPeerState() {
   resetTransientUiState();
+  APP.role = null;
   clearTimeout(APP.hostDeadlineTimer);
   clearTimeout(APP.hostSyncTimer);
   clearTimeout(APP.joinAttemptTimer);
+  clearTimeout(APP.hostPeerRecoveryTimer);
   clearInterval(APP.hostIntervalTimer);
   clearInterval(APP.playerWatchdogTimer);
   clearTimeout(APP.playerReconnectTimer);
@@ -4497,6 +4775,10 @@ function destroyPeerState() {
   APP.hostDeadlineTimer = null;
   APP.hostIntervalTimer = null;
   APP.playerWatchdogTimer = null;
+  APP.hostPeerRecoveryTimer = null;
+  APP.hostPeerRecoveryAttempts = 0;
+  APP.hostPeerRegistered = false;
+  APP.connectionHealthTimers = new WeakMap();
   APP.lastHostPacketAt = 0;
   APP.hostSyncTimer = null;
   APP.joinAttemptTimer = null;
