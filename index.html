@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260815c">
+  <link rel="stylesheet" href="./styles.css?v=20260815d">
   <script defer src="./data.js?v=20260815c"></script>
   <script defer src="./app.js?v=20260815h"></script>
 </head>
@@ -168,27 +168,51 @@
           <p>房號一打、綽號一報，名字直接上牆。</p>
           <button id="goto-join-btn" class="secondary-btn">手動輸房號</button>
         </article>
-        <article class="mode-card">
+        <article class="mode-card game-guide-card">
           <p class="mode-icon">📖</p>
-          <h3>這桌怎麼玩</h3>
-          <ul class="plain-list compact">
-            <li>最多 40 人，整晚跑滿 10 Round。</li>
-            <li>開局暗抽 6 位帶原者，感染狀態不公開。</li>
-            <li>第 1 局一開，6 位帶原者會私下收到身分。</li>
-            <li>每 Round 隨機兩兩配對，每人只有 1 次偷驗機會。</li>
-            <li>每局 45 秒，鐘響還沒選，直接算「換一個」。</li>
-            <li>感染後還能繼續傳下去，不會提早出局。</li>
-            <li>第 1 局不鬧事；第 2 局起才會抽無厘頭亂入，讓風險突然往上飆。</li>
-            <li>抽到「對方偷偷戳破套子」，戴套口交與戴套性交會在翻牌時改判成對應的無套行為。</li>
-            <li>第 2 局起，欲求不滿值 25% 才會抽失控事件；越高越可能抽到「沒得選，我就是要做」或「你不想」。</li>
-            <li>帶原者無套性交成功 2 次，鎖套 25%；之後每次 +15%，最高 70%。</li>
-            <li>焦慮得病值每 25% 多遮一條線索；80% 起連聊天套話都做不到。</li>
-            <li>整晚 0 次親密互動，直接空手出局。</li>
-            <li>帶原者全隊直接感染 6 人，或由後來感染的人間接感染 15 人，6 位帶原者直接贏。</li>
-            <li>終局還有人健康，且帶原者沒過關，就按生存分搶 6 張椅子。</li>
-            <li>生存分：健康 +120、親密 +4、戴套 +7、驚險避過 +10、正確換人 +7、偷驗 +5、醫院最多 +6；無套 -9、傳播 -10。</li>
-            <li>0 次親密的人不算進全感染判定；有下場的人如果全中標，開局那 6 位帶原者也會直接包下頒獎台。</li>
-          </ul>
+          <h3>遊戲簡介</h3>
+          <p class="game-guide-lead">40 人裡藏著 6 位帶原者。10 個晚上一直換人，感染狀態全程不公開，最後只有 6 人上台。</p>
+          <div class="game-guide">
+            <section class="game-guide-block">
+              <span class="game-guide-index">01</span>
+              <h4>開桌</h4>
+              <ul>
+                <li><strong>8 人</strong>就能開，12–40 人最熱鬧。</li>
+                <li>主揪按開始後，暗抽 <strong>6 位初始帶原者</strong>，只有本人知道。</li>
+                <li>全場 <strong>10 個晚上</strong>，每晚重新隨機兩兩配對。</li>
+              </ul>
+            </section>
+            <section class="game-guide-block">
+              <span class="game-guide-index">02</span>
+              <h4>每個晚上</h4>
+              <ul>
+                <li><strong>45 秒</strong>內可以先聊天、偷測，再選親密互動或「換一個」。</li>
+                <li>親密互動要<strong>雙方都選</strong>才成立；任何一人換人或去醫院，這晚就不會發生。</li>
+                <li>每人整晚只有 <strong>1 次偷測</strong>；醫院不限次數，但會用掉這晚。</li>
+                <li>時間到還沒選，系統直接當作「換一個」。</li>
+              </ul>
+            </section>
+            <section class="game-guide-block">
+              <span class="game-guide-index">03</span>
+              <h4>第 2 晚開始鬧</h4>
+              <ul>
+                <li>第 1 晚沒有亂入事件；第 2 晚起，欲求不滿值達 <strong>25%</strong> 就可能失控，觸發率最高 70%。</li>
+                <li>「沒得選，我就是要做」會強制無套性交；「你不想」會鎖住兩個戴套選項。</li>
+                <li>「對方偷偷戳破套子」會在翻牌時，把戴套改判成無套。</li>
+                <li>焦慮得病值每 25% 少看一條線索；到 <strong>80%</strong> 就聊不出資訊。</li>
+              </ul>
+            </section>
+            <section class="game-guide-block">
+              <span class="game-guide-index">04</span>
+              <h4>怎麼贏</h4>
+              <ul>
+                <li>每人至少要有 <strong>1 次親密互動</strong>，否則直接出局。</li>
+                <li>帶原陣營只要全隊直傳 <strong>6 人</strong>、間接感染 <strong>15 人</strong>，或讓有下場的人全中標，6 位帶原者一起贏。</li>
+                <li>帶原陣營沒過關，就由健康者優先，再按生存分補滿 <strong>6 席</strong>。</li>
+                <li>感染後不會出局，還能繼續往下傳。</li>
+              </ul>
+            </section>
+          </div>
         </article>
       </div>
     </section>
@@ -251,23 +275,45 @@
         </article>
 
         <article class="notice-card lobby-rules-card">
-          <h3>今晚規矩</h3>
-          <ul class="plain-list compact">
-            <li>12 到 40 人最熱鬧，8 人是最低開桌門檻。</li>
-            <li>主揪一按開始，遊戲就會暗抽 6 位帶原者，身分全程藏好。</li>
-            <li>第 1 局一開，帶原者會私下收到任務：全隊直傳 6 人、間接感染 15 人，或讓有下場的人全中標。</li>
-            <li>全場跑 10 Round，每 Round 都會重新隨機兩兩配對。</li>
-            <li>每局 45 秒，倒數歸零還沒出牌，就默認「換一個」。</li>
-            <li>第 1 局平安下莊；第 2 局起才可能被莫名其妙的亂入事件搞到風險暴衝。</li>
-            <li>「對方偷偷戳破套子」會把戴套口交、戴套性交改判成對應的無套行為。</li>
-            <li>每人整晚只有 1 次偷驗對方的機會，醫院則想去幾次都行。</li>
-            <li>第 2 局起，欲求不滿值 25% 才進入失控抽選，最高有 70% 機率觸發。</li>
-            <li>帶原者無套性交成功 2 次，遇到他的人開始抽 25% 鎖套，最高 70%。</li>
-            <li>抽到「沒得選，我就是要做」，會強制套用無套性交。</li>
-            <li>另一種失控是「你不想」：戴套口交與戴套性交會被全部鎖住。</li>
-            <li>焦慮得病值每 25% 多遮一條線索；80% 起無法再靠聊天取得資訊。</li>
-            <li>每局結束後，要等主揪拍板才會進下一局。</li>
-          </ul>
+          <h3>遊戲簡介</h3>
+          <p class="game-guide-lead">40 人裡藏著 6 位帶原者。10 個晚上一直換人，感染狀態全程不公開，最後只有 6 人上台。</p>
+          <div class="game-guide">
+            <section class="game-guide-block">
+              <span class="game-guide-index">01</span>
+              <h4>開桌</h4>
+              <ul>
+                <li><strong>8 人</strong>就能開，12–40 人最熱鬧。</li>
+                <li>開局暗抽 <strong>6 位帶原者</strong>；全場 10 個晚上，每晚重新隨機配對。</li>
+              </ul>
+            </section>
+            <section class="game-guide-block">
+              <span class="game-guide-index">02</span>
+              <h4>這晚有沒有成</h4>
+              <ul>
+                <li>每晚 <strong>45 秒</strong>；雙方都選親密互動才成立。</li>
+                <li>任何一人換人或去醫院，這晚就不會發生。時間到沒選，默認「換一個」。</li>
+                <li>每人只有 <strong>1 次偷測</strong>；醫院不限次數。</li>
+              </ul>
+            </section>
+            <section class="game-guide-block">
+              <span class="game-guide-index">03</span>
+              <h4>第 2 晚起可能失控</h4>
+              <ul>
+                <li>欲求不滿值達 <strong>25%</strong> 就可能強制無套，或鎖住戴套選項。</li>
+                <li>偷戳套子會把戴套改判成無套；焦慮得病值越高，看得到的線索越少。</li>
+                <li>帶原者無套性交成功 2 次後，會開始提高對方戴套選項被鎖的機率。</li>
+              </ul>
+            </section>
+            <section class="game-guide-block">
+              <span class="game-guide-index">04</span>
+              <h4>怎麼贏</h4>
+              <ul>
+                <li>整晚至少要有 <strong>1 次親密互動</strong>，否則直接出局。</li>
+                <li>帶原陣營全隊直傳 <strong>6 人</strong>、間接感染 <strong>15 人</strong>，或讓有下場的人全中標，6 位帶原者一起贏。</li>
+                <li>帶原陣營沒過關，就由健康者優先，再按生存分補滿 <strong>6 席</strong>。</li>
+              </ul>
+            </section>
+          </div>
         </article>
       </div>
 

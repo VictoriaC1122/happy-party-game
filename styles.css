@@ -457,7 +457,8 @@ select {
 }
 
 .mode-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 
 .test-lab {
@@ -655,6 +656,76 @@ select {
 
 .host-lobby .lobby-rules-card {
   display: none;
+}
+
+.game-guide-card {
+  align-content: start;
+  grid-column: 1 / -1;
+}
+
+.game-guide-card .game-guide {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.game-guide-lead {
+  margin: 0 0 14px;
+  color: #6f5960;
+  font-size: 0.94rem;
+  line-height: 1.65;
+}
+
+.game-guide {
+  display: grid;
+  gap: 10px;
+}
+
+.game-guide-block {
+  position: relative;
+  min-width: 0;
+  padding: 14px 14px 14px 50px;
+  border: 1px solid rgba(134, 96, 106, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 252, 252, 0.62);
+}
+
+.game-guide-index {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  color: #855765;
+  background: rgba(215, 181, 189, 0.5);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.game-guide-block h4 {
+  margin: 1px 0 7px;
+  color: #664c54;
+  font-size: 0.96rem;
+}
+
+.game-guide-block ul {
+  margin: 0;
+  padding-left: 17px;
+}
+
+.game-guide-block li {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.game-guide-block li + li {
+  margin-top: 5px;
+}
+
+.game-guide-block strong {
+  color: #875565;
 }
 
 .host-lobby .lobby-access-card {
@@ -1539,6 +1610,14 @@ body.event-modal-open {
   .player-row,
   .award-row {
     grid-template-columns: auto 1fr;
+  }
+
+  .game-guide-card {
+    grid-column: auto;
+  }
+
+  .game-guide-card .game-guide {
+    grid-template-columns: 1fr;
   }
 
   .player-row > :last-child,
