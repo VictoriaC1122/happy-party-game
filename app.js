@@ -1522,6 +1522,9 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
   const room = APP.hostRoom;
   const me = room.players[playerId];
   const shared = sharedContext || buildSnapshotSharedContext(room);
+  const carrierMissionStatus = me.isCarrier
+    ? calculateCarrierMissionStatus(Object.values(room.players))
+    : null;
 
   const snapshot = {
     role: playerId === room.hostId ? "host" : "player",
@@ -1545,7 +1548,8 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       detectedInfected: me.detectedSelf ? me.detectedInfected : null,
       isInitialCarrier: Boolean(me.isCarrier),
       carrierRawSexSuccesses: me.isCarrier ? (me.stats.successfulRawSex || 0) : 0,
-      carrierCondomLockChance: me.isCarrier ? getCarrierCondomLockChance(me) : 0
+      carrierCondomLockChance: me.isCarrier ? getCarrierCondomLockChance(me) : 0,
+      carrierMissionStatus
     }
   };
 
@@ -1825,9 +1829,16 @@ function renderRound(snapshot) {
   if (self.isInitialCarrier) {
     const successes = self.carrierRawSexSuccesses || 0;
     const chancePercent = Math.round((self.carrierCondomLockChance || 0) * 100);
-    APP.dom.carrierMissionProgress.textContent = successes < GAME_CONFIG.carrierCondomLockMinimumRawSex
-      ? `已成功 ${successes} 次 · 再 ${GAME_CONFIG.carrierCondomLockMinimumRawSex - successes} 次開始加壓`
-      : `已成功 ${successes} 次 · 對方戴套選項額外上鎖 ${chancePercent}%`;
+    const mission = self.carrierMissionStatus || {
+      directInfections: 0,
+      indirectInfections: 0,
+      directGoal: GAME_CONFIG.carrierDirectInfectionWinCount,
+      indirectGoal: GAME_CONFIG.carrierIndirectInfectionWinCount
+    };
+    const pressure = successes < GAME_CONFIG.carrierCondomLockMinimumRawSex
+      ? `你再 ${GAME_CONFIG.carrierCondomLockMinimumRawSex - successes} 次無套開始鎖套`
+      : `你的鎖套率 ${chancePercent}%`;
+    APP.dom.carrierMissionProgress.textContent = `全隊直傳 ${mission.directInfections} / ${mission.directGoal} · 感染鏈 ${mission.indirectInfections} / ${mission.indirectGoal} · ${pressure}`;
   }
   APP.dom.dissatisfactionValue.textContent = `${self.dissatisfaction}%`;
   APP.dom.healthAnxietyValue.textContent = `${self.healthAnxiety}%`;
@@ -2391,7 +2402,7 @@ function buildCarrierMissionModals(player, roundIndex, playerId) {
     icon: "🦠",
     kicker: "你的隱藏身分",
     title: "你是初始帶原者",
-    body: "你是今晚 6 位帶原者之一，別露餡。多拚幾次無套性交；成功 2 次，遇到你的人就開始抽 25% 鎖套，最高 70%。"
+    body: "你是今晚 6 位帶原者之一。全隊直傳 6 人、讓後來感染的人再拐中 15 人，或把有下場的人全送進感染名單，6 人就一起贏。你無套性交成功 2 次後，遇到你的人開始抽 25% 鎖套，最高 70%。"
   }];
 }
 
@@ -3324,6 +3335,72 @@ function maybeTransmit(sourcePlayer, targetPlayer, actionKey, roundIndex, riskCo
   }
 }
 
+function calculateCarrierMissionStatus(players) {
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  let directInfections = 0;
+  let indirectInfections = 0;
+
+  players.forEach((player) => {
+    if (player.isCarrier || !player.isInfected || !player.infectionSourceId) {
+      return;
+    }
+    const source = playerById.get(player.infectionSourceId);
+    if (!source) {
+      return;
+    }
+    if (source.isCarrier) {
+      directInfections += 1;
+    } else {
+      indirectInfections += 1;
+    }
+  });
+
+  const activePlayers = players.filter((player) => player.intimacyCount > 0);
+  const activePlayersAllInfected = activePlayers.length > 0
+    && activePlayers.every((player) => player.isInfected);
+  const directGoal = GAME_CONFIG.carrierDirectInfectionWinCount;
+  const indirectGoal = GAME_CONFIG.carrierIndirectInfectionWinCount;
+  const directGoalMet = directInfections >= directGoal;
+  const indirectGoalMet = indirectInfections >= indirectGoal;
+
+  return {
+    directInfections,
+    indirectInfections,
+    directGoal,
+    indirectGoal,
+    directGoalMet,
+    indirectGoalMet,
+    activePlayersAllInfected,
+    victory: activePlayersAllInfected || directGoalMet || indirectGoalMet
+  };
+}
+
+function describeCarrierVictory(carrierMissionStatus) {
+  const status = carrierMissionStatus;
+  if (status.activePlayersAllInfected) {
+    return {
+      heading: "有下場的全淪陷，六位帶原者包下舞台",
+      reason: "有下場的人全部感染"
+    };
+  }
+  if (status.directGoalMet && status.indirectGoalMet) {
+    return {
+      heading: "直傳、感染鏈雙線過關",
+      reason: `全隊直傳 ${status.directInfections} 人，感染鏈又拐中 ${status.indirectInfections} 人`
+    };
+  }
+  if (status.directGoalMet) {
+    return {
+      heading: `全隊直傳 ${status.directInfections} 人，六位帶原者過關`,
+      reason: `全隊直傳達到 ${status.directInfections} 人`
+    };
+  }
+  return {
+    heading: `感染鏈拐中 ${status.indirectInfections} 人，六位帶原者過關`,
+    reason: `感染鏈間接感染達到 ${status.indirectInfections} 人`
+  };
+}
+
 function handleHostAdvance() {
   const room = APP.hostRoom;
   if (!room || room.phase !== "summary") {
@@ -3341,26 +3418,27 @@ function handleHostAdvance() {
 function finalizeHostedGame() {
   const room = APP.hostRoom;
   const players = Object.values(room.players);
-  const activePlayers = players.filter((player) => player.intimacyCount > 0);
-  const activePlayersAllInfected = activePlayers.length > 0
-    && activePlayers.every((player) => player.isInfected);
-  const selection = selectFinalWinners(players, activePlayersAllInfected);
+  const carrierMissionStatus = calculateCarrierMissionStatus(players);
+  const carrierVictoryCopy = carrierMissionStatus.victory
+    ? describeCarrierVictory(carrierMissionStatus)
+    : null;
+  const selection = selectFinalWinners(players, carrierMissionStatus.victory);
   const winnerById = new Map(selection.entries.map((entry) => [entry.player.id, entry]));
   const finalResults = {};
 
   players.forEach((player) => {
     const winner = winnerById.get(player.id) || null;
-    const scoreCard = activePlayersAllInfected
+    const scoreCard = carrierMissionStatus.victory
       ? calculateCarrierStageScore(player)
       : calculateSurvivalScore(player);
     let kind = "lose";
     let label = "今晚翻車";
     let detail = `親密 ${player.intimacyCount} 次，終局是${player.isInfected ? "感染" : "健康"}，生存分 ${scoreCard.score}。`;
 
-    if (winner && activePlayersAllInfected) {
+    if (winner && carrierMissionStatus.victory) {
       kind = "carrier";
       label = `帶原勝利 · 第 ${winner.rank} 席`;
-      detail = `有下場的人全感染，帶原任務成功；你帶出 ${player.transmissionCount} 次傳播，站上第 ${winner.rank} 席。`;
+      detail = `${carrierVictoryCopy.reason}，帶原任務成功；你帶出 ${player.transmissionCount} 次傳播，站上第 ${winner.rank} 席。`;
     } else if (winner) {
       kind = "winner";
       label = `${player.isInfected ? "逆風勝利" : "健康勝利"} · 第 ${winner.rank} 席`;
@@ -3369,14 +3447,14 @@ function finalizeHostedGame() {
       kind = "lose";
       label = "全程觀望王";
       detail = "你一路看到最後都沒真正下場，遊戲直接判你白來。";
-    } else if (activePlayersAllInfected) {
+    } else if (carrierMissionStatus.victory) {
       kind = "lose";
-      label = "下場就中標";
-      detail = "扣掉全程觀望者，有下場的人全部感染；這局是 6 位初始帶原者的陣營勝利。";
+      label = "帶原陣營過關";
+      detail = `${carrierVictoryCopy.reason}；這局是 6 位初始帶原者的陣營勝利。`;
     } else if (player.isCarrier) {
       kind = "lose";
       label = "帶原任務失敗";
-      detail = `終局還有人健康，帶原陣營先扣順位；你的生存分是 ${scoreCard.score}。`;
+      detail = `全隊直傳 ${carrierMissionStatus.directInfections} / ${carrierMissionStatus.directGoal}、感染鏈 ${carrierMissionStatus.indirectInfections} / ${carrierMissionStatus.indirectGoal}，也沒有全場淪陷；你的生存分是 ${scoreCard.score}。`;
     } else if (!player.isInfected) {
       kind = "lose";
       label = "健康但差一席";
@@ -3397,13 +3475,13 @@ function finalizeHostedGame() {
   });
 
   room.finalResults = finalResults;
-  room.finale = buildFinale(players, selection, activePlayersAllInfected, finalResults);
+  room.finale = buildFinale(players, selection, carrierMissionStatus, finalResults);
   room.phase = "awards";
   hostSyncAll({ immediate: true });
 }
 
-function selectFinalWinners(players, activePlayersAllInfected) {
-  if (activePlayersAllInfected) {
+function selectFinalWinners(players, carrierVictory) {
+  if (carrierVictory) {
     const entries = players
       .filter((player) => player.isCarrier)
       .map((player) => ({
@@ -3484,13 +3562,16 @@ function stableFinalTieValue(playerId) {
   return hash >>> 0;
 }
 
-function buildFinale(players, selection, activePlayersAllInfected, finalResults) {
+function buildFinale(players, selection, carrierMissionStatus, finalResults) {
   const winnerCount = selection.entries.length;
-  const heading = activePlayersAllInfected
-    ? "有下場的全淪陷，六位帶原者包下舞台"
+  const carrierVictoryCopy = carrierMissionStatus.victory
+    ? describeCarrierVictory(carrierMissionStatus)
+    : null;
+  const heading = carrierMissionStatus.victory
+    ? carrierVictoryCopy.heading
     : `${winnerCount} 位終局勝利者上台`;
-  const body = activePlayersAllInfected
-    ? "0 次親密的人先判輸並排除；其餘有下場的人全部感染，6 位初始帶原者共同獲勝。"
+  const body = carrierMissionStatus.victory
+    ? `${carrierVictoryCopy.reason}；終局直傳 ${carrierMissionStatus.directInfections} 人、間接感染 ${carrierMissionStatus.indirectInfections} 人，6 位初始帶原者共同獲勝。`
     : `健康者優先，再按生存分補滿 6 席。今晚共有 ${winnerCount} 位符合親密資格的玩家站上舞台。`;
 
   const podium = buildWinnerPodium(selection);

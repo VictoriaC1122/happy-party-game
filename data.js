@@ -5,6 +5,8 @@ const GAME_CONFIG = {
   roundCount: 10,
   initialCarrierCount: 6,
   finalWinnerCount: 6,
+  carrierDirectInfectionWinCount: 6,
+  carrierIndirectInfectionWinCount: 15,
   roundDurationMs: 45 * 1000,
   startDissatisfaction: 0,
   startHealthAnxiety: 0,

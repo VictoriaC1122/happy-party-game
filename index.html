@@ -6,8 +6,8 @@
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
   <link rel="stylesheet" href="./styles.css?v=20260815c">
-  <script defer src="./data.js?v=20260815b"></script>
-  <script defer src="./app.js?v=20260815f"></script>
+  <script defer src="./data.js?v=20260815c"></script>
+  <script defer src="./app.js?v=20260815g"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -63,7 +63,7 @@
               <div><span>已傳播</span><strong id="test-carrier-transmissions">0 次</strong></div>
               <div><span>親密互動</span><strong id="test-carrier-intimacy">0 次</strong></div>
             </div>
-            <p class="carrier-test-mission">把有下場的人全送上感染名單，6 位帶原者就一起登台。</p>
+            <p class="carrier-test-mission">全隊直傳 6 人、感染鏈再拐中 15 人，或讓有下場的人全中標，6 位帶原者就一起登台。</p>
           </article>
         </article>
 
@@ -126,7 +126,7 @@
               <li>開局暗抽 6 位帶原者，只有帶原者本人會收到自己的答案。</li>
               <li>10 Round 隨機換人，每局 45 秒。</li>
               <li>整晚完全沒親密互動，直接頒你「來觀光」。</li>
-              <li>終局只留 6 席；有下場的人全感染，6 位帶原者一起贏。</li>
+              <li>終局只留 6 席；帶原者全隊直傳 6 人、感染鏈間接感染 15 人，或有下場的人全中標，就一起贏。</li>
             </ul>
           </article>
         </div>
@@ -184,9 +184,10 @@
             <li>帶原者無套性交成功 2 次，鎖套 25%；之後每次 +15%，最高 70%。</li>
             <li>焦慮得病值每 25% 多遮一條線索；80% 起連聊天套話都做不到。</li>
             <li>整晚 0 次親密互動，直接空手出局。</li>
-            <li>終局還有人健康，就按生存分搶 6 張椅子。</li>
+            <li>帶原者全隊直接感染 6 人，或由後來感染的人間接感染 15 人，6 位帶原者直接贏。</li>
+            <li>終局還有人健康，且帶原者沒過關，就按生存分搶 6 張椅子。</li>
             <li>生存分：健康 +120、親密 +4、戴套 +7、驚險避過 +10、正確換人 +7、偷驗 +5、醫院最多 +6；無套 -9、傳播 -10。</li>
-            <li>0 次親密的人不算進感染判定；有下場的人如果全中標，開局那 6 位帶原者直接包下頒獎台。</li>
+            <li>0 次親密的人不算進全感染判定；有下場的人如果全中標，開局那 6 位帶原者也會直接包下頒獎台。</li>
           </ul>
         </article>
       </div>
@@ -254,7 +255,7 @@
           <ul class="plain-list compact">
             <li>12 到 40 人最熱鬧，8 人是最低開桌門檻。</li>
             <li>主揪一按開始，遊戲就會暗抽 6 位帶原者，身分全程藏好。</li>
-            <li>第 1 局一開，帶原者會私下收到任務：別露餡，多拚幾次無套性交。</li>
+            <li>第 1 局一開，帶原者會私下收到任務：全隊直傳 6 人、間接感染 15 人，或讓有下場的人全中標。</li>
             <li>全場跑 10 Round，每 Round 都會重新隨機兩兩配對。</li>
             <li>每局 45 秒，倒數歸零還沒出牌，就默認「換一個」。</li>
             <li>第 1 局平安下莊；第 2 局起才可能被莫名其妙的亂入事件搞到風險暴衝。</li>
@@ -297,9 +298,9 @@
       <div id="carrier-mission-banner" class="carrier-mission-banner hidden">
         <div>
           <span>🦠 遊戲陣營：帶原者</span>
-          <strong>別露餡，多拚幾次無套性交</strong>
+          <strong>直傳 6 人或感染鏈拐中 15 人，全隊就贏</strong>
         </div>
-        <span id="carrier-mission-progress" class="carrier-mission-progress">已成功 0 次 · 再 2 次開始加壓</span>
+        <span id="carrier-mission-progress" class="carrier-mission-progress">全隊直傳 0 / 6 · 感染鏈 0 / 15</span>
       </div>
 
       <div class="stats-grid">
