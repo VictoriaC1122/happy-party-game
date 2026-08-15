@@ -12,6 +12,24 @@ const SCRIPT_SOURCES = {
   peer: "./vendor/peerjs.min.js?v=20260814a",
   qr: "./vendor/qrcode.min.js?v=20260814b"
 };
+const DEFAULT_ICE_SERVERS = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  }
+];
 const SCRIPT_LOADS = new Map();
 const TEST_BOT_NAMES = [
   "陪測分身阿酒",
@@ -240,7 +258,7 @@ function createPeerClient(id) {
     : [];
   const iceServers = configuredIceServers.length
     ? configuredIceServers
-    : [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+    : DEFAULT_ICE_SERVERS;
   return new Peer(id, {
     pingInterval: 4000,
     config: {
