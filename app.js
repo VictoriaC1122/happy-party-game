@@ -1,10 +1,12 @@
 const STORAGE_KEY = "happy-party-profile-v1";
 const CONSENT_KEY = "happy-party-consent-v1";
+const PLAYER_SESSIONS_KEY = "happy-party-player-sessions-v1";
 const HOST_PEER_PREFIX = "happy-party-host-";
 const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
 const HOST_HEARTBEAT_MS = 5000;
 const LOBBY_DISCONNECT_GRACE_MS = 18000;
 const PLAYER_CONNECTION_STALE_MS = 18000;
+const PEER_OPEN_TIMEOUT_MS = 12000;
 const PLAYER_RECONNECT_DELAYS_MS = [900, 1600, 2600, 4200, 6000, 8200];
 const SCRIPT_SOURCES = {
   peer: "./vendor/peerjs.min.js?v=20260814a",
@@ -31,6 +33,7 @@ const APP = {
   peer: null,
   hostConn: null,
   hostConnections: new Map(),
+  hostConnectionPlayerIds: new Map(),
   hostDisconnectTimers: new Map(),
   hostRoom: null,
   playerSnapshot: null,
@@ -45,6 +48,7 @@ const APP = {
   countdownState: null,
   lastSentSnapshotKeys: new Map(),
   lobbyPlayerIds: new Set(),
+  lobbyOnlinePlayerIds: new Set(),
   testBotTimers: [],
   testViewPlayerId: "",
   testCarrierPreviewActive: false,
@@ -61,6 +65,8 @@ const APP = {
   roomCode: "",
   hostPeerId: "",
   selfId: "",
+  playerSessionId: "",
+  autoResumeStarted: false,
   selectedAvatar: AVATARS[0],
   pendingRoomCode: "",
   renderFrame: null,
@@ -228,6 +234,23 @@ function ensurePeerLibrary() {
   return loadGlobalScript("peer", "Peer");
 }
 
+function createPeerClient(id) {
+  const configuredIceServers = Array.isArray(window.HAPPY_PARTY_ICE_SERVERS)
+    ? window.HAPPY_PARTY_ICE_SERVERS.filter((server) => server && server.urls)
+    : [];
+  const iceServers = configuredIceServers.length
+    ? configuredIceServers
+    : [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+  return new Peer(id, {
+    pingInterval: 4000,
+    config: {
+      iceServers,
+      iceCandidatePoolSize: 4,
+      sdpSemantics: "unified-plan"
+    }
+  });
+}
+
 function ensureQrLibrary() {
   return loadGlobalScript("qr", "QRCode");
 }
@@ -241,6 +264,7 @@ function initApp() {
   hydrateRoomQuery();
   renderActionButtons();
   switchScreen("consent-screen");
+  tryAutoResumeStoredRoom();
 }
 
 function cacheDom() {
@@ -284,6 +308,7 @@ function cacheDom() {
     startGameBtn: document.getElementById("start-game-btn"),
     hostControls: document.getElementById("host-controls"),
     playerCountDisplay: document.getElementById("player-count-display"),
+    playerWallStatus: document.getElementById("player-wall-status"),
     playerList: document.getElementById("player-list"),
     roundTitle: document.getElementById("round-title"),
     timerPill: document.getElementById("timer-pill"),
@@ -339,6 +364,9 @@ function bindDomEvents() {
   APP.dom.consentContinue.addEventListener("click", () => {
     localStorage.setItem(CONSENT_KEY, "yes");
     if (APP.pendingRoomCode) {
+      if (resumePendingRoomFromStorage()) {
+        return;
+      }
       switchScreen("join-screen");
       APP.dom.roomCodeInput.value = APP.pendingRoomCode;
       APP.dom.playerNameInput.focus();
@@ -411,6 +439,95 @@ function hydrateStoredProfile() {
   APP.dom.playerNameInput.value = profile.name || "";
   APP.dom.hostNameInput.value = profile.name || "";
   highlightAvatarChip(APP.selectedAvatar);
+}
+
+function loadPlayerSessions() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PLAYER_SESSIONS_KEY) || "{}");
+    return stored && typeof stored === "object" ? stored : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function savePlayerSessions(sessions) {
+  try {
+    const entries = Object.entries(sessions)
+      .sort((left, right) => Number(right[1]?.updatedAt || 0) - Number(left[1]?.updatedAt || 0))
+      .slice(0, 12);
+    localStorage.setItem(PLAYER_SESSIONS_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch (error) {
+    // Private browsing can reject storage writes; the current tab still keeps the session in memory.
+  }
+}
+
+function sanitizePlayerSessionId(value) {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 96);
+  return normalized.length >= 12 ? normalized : "";
+}
+
+function createPlayerSessionId() {
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(18);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return `${randomId(24)}${Date.now().toString(36)}`;
+}
+
+function getStoredPlayerSessionId(roomCode) {
+  const room = sanitizeRoomCode(roomCode);
+  const record = loadPlayerSessions()[room];
+  return sanitizePlayerSessionId(typeof record === "string" ? record : record?.id);
+}
+
+function getOrCreatePlayerSessionId(roomCode, preferredId = "") {
+  const room = sanitizeRoomCode(roomCode);
+  const sessions = loadPlayerSessions();
+  const current = sanitizePlayerSessionId(typeof sessions[room] === "string" ? sessions[room] : sessions[room]?.id);
+  const sessionId = sanitizePlayerSessionId(preferredId) || current || createPlayerSessionId();
+  sessions[room] = { id: sessionId, updatedAt: Date.now() };
+  savePlayerSessions(sessions);
+  return sessionId;
+}
+
+function persistPlayerRoomInUrl(roomCode) {
+  if (!window.history?.replaceState) {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", sanitizeRoomCode(roomCode));
+  url.hash = "";
+  window.history.replaceState(null, "", url.toString());
+}
+
+function resumePendingRoomFromStorage() {
+  if (APP.autoResumeStarted || !APP.pendingRoomCode) {
+    return false;
+  }
+  const sessionId = getStoredPlayerSessionId(APP.pendingRoomCode);
+  const profile = currentProfile();
+  if (!sessionId || !profile.name) {
+    return false;
+  }
+  APP.autoResumeStarted = true;
+  APP.dom.roomCodeInput.value = APP.pendingRoomCode;
+  APP.dom.playerNameInput.value = profile.name;
+  APP.selectedAvatar = profile.avatar;
+  highlightAvatarChip(profile.avatar);
+  switchScreen("join-screen");
+  beginPlayerJoin(APP.pendingRoomCode, profile, { isReconnect: true, sessionId });
+  return true;
+}
+
+function tryAutoResumeStoredRoom() {
+  if (localStorage.getItem(CONSENT_KEY) !== "yes") {
+    return;
+  }
+  resumePendingRoomFromStorage();
 }
 
 function renderAvatarPicker() {
@@ -804,7 +921,11 @@ function attemptPlayerReconnect() {
   APP.playerReconnectAttempts += 1;
   const peer = APP.peer;
   if (peer.destroyed) {
-    fallbackToJoinScreen("你的玩家連線整個散掉了，重新滑進來最快。");
+    createPlayerPeer(APP.roomCode, APP.playerProfile, {
+      isReconnect: true,
+      preserveSnapshot: true,
+      sessionId: APP.playerSessionId
+    });
     return;
   }
   if (peer.disconnected && typeof peer.reconnect === "function") {
@@ -1145,14 +1266,33 @@ async function handleCreateRoom(testMode = false) {
 function attemptCreateHostPeer(profile, attempts, testMode = false) {
   const roomCode = generateRoomCode();
   const hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
-  const peer = new Peer(hostPeerId);
+  const peer = createPeerClient(hostPeerId);
   let initialized = false;
+  let abandoned = false;
+  const openTimer = setTimeout(() => {
+    if (initialized || abandoned) {
+      return;
+    }
+    abandoned = true;
+    try {
+      peer.destroy();
+    } catch (error) {
+      // Retry below with a fresh room peer.
+    }
+    if (attempts < 3) {
+      attemptCreateHostPeer(profile, attempts + 1, testMode);
+      return;
+    }
+    setCreateRoomBusy(false);
+    showToast("開桌訊號等太久了，再按一次就好。");
+  }, PEER_OPEN_TIMEOUT_MS);
 
   peer.on("open", (id) => {
-    if (initialized) {
+    if (abandoned || initialized) {
       return;
     }
     initialized = true;
+    clearTimeout(openTimer);
     setCreateRoomBusy(false);
     APP.role = "host";
     APP.peer = peer;
@@ -1177,7 +1317,12 @@ function attemptCreateHostPeer(profile, attempts, testMode = false) {
   });
 
   peer.on("error", (error) => {
+    if (abandoned) {
+      return;
+    }
+    clearTimeout(openTimer);
     if (error.type === "unavailable-id" && attempts < 6) {
+      abandoned = true;
       peer.destroy();
       attemptCreateHostPeer(profile, attempts + 1, testMode);
       return;
@@ -1186,6 +1331,7 @@ function attemptCreateHostPeer(profile, attempts, testMode = false) {
       handleHostPeerDisconnected(peer);
       return;
     }
+    abandoned = true;
     setCreateRoomBusy(false);
     showToast(`開桌失敗：${error.type || error.message}`);
   });
@@ -1214,12 +1360,37 @@ function createHostRoom(profile, testMode = false) {
   };
 }
 
+function getHostConnectionPlayerId(conn) {
+  return APP.hostConnectionPlayerIds.get(conn) || conn?.peer || "";
+}
+
+function findPlayerBySessionId(room, sessionId) {
+  if (!room || !sessionId) {
+    return null;
+  }
+  return Object.values(room.players)
+    .find((player) => !player.isHost && player.sessionId === sessionId) || null;
+}
+
+function bindHostConnection(playerId, conn) {
+  const existingConn = APP.hostConnections.get(playerId);
+  APP.hostConnectionPlayerIds.set(conn, playerId);
+  APP.hostConnections.set(playerId, conn);
+  if (existingConn && existingConn !== conn) {
+    try {
+      existingConn.close();
+    } catch (error) {
+      // The replacement connection is already active, so old-channel cleanup is best-effort.
+    }
+  }
+}
+
 function wireHostPeer(peer) {
   peer.on("connection", (conn) => {
     conn.on("open", () => {
       conn.on("data", (data) => handleHostMessage(conn, data));
-      conn.on("close", () => handleHostDisconnect(conn.peer, conn));
-      conn.on("error", () => handleHostDisconnect(conn.peer, conn));
+      conn.on("close", () => handleHostDisconnect(getHostConnectionPlayerId(conn), conn));
+      conn.on("error", () => handleHostDisconnect(getHostConnectionPlayerId(conn), conn));
     });
   });
 }
@@ -1227,6 +1398,7 @@ function wireHostPeer(peer) {
 function createPlayerState(id, profile, isHost = false) {
   return {
     id,
+    sessionId: isHost ? "" : sanitizePlayerSessionId(profile.sessionId),
     name: sanitizeName(profile.name || `玩家${Math.floor(Math.random() * 999)}`),
     avatar: sanitizeAvatar(profile.avatar),
     isHost,
@@ -1276,24 +1448,55 @@ async function handleJoinSubmit(event) {
   }
 
   saveStoredProfile({ name, avatar });
+  APP.autoResumeStarted = true;
+  await beginPlayerJoin(roomCode, { name, avatar });
+}
+
+async function beginPlayerJoin(roomCode, profile, options = {}) {
+  const sessionId = getOrCreatePlayerSessionId(roomCode, options.sessionId);
   destroyPeerState();
-  rememberPlayerProfile({ name, avatar });
-  setJoinFormBusy(true, "潛入中…");
-  showToast("正在找主揪對暗號，等我一下。");
+  rememberPlayerProfile(profile);
+  APP.playerSessionId = sessionId;
+  APP.pendingRoomCode = roomCode;
+  persistPlayerRoomInUrl(roomCode);
+  setJoinFormBusy(true, options.isReconnect ? "正在接回座位…" : "潛入中…");
+  showToast(options.isReconnect ? "正在接回你原本的座位。" : "正在找主揪對暗號，等我一下。");
   try {
     await ensurePeerLibrary();
-    createPlayerPeer(roomCode, { name, avatar });
+    createPlayerPeer(roomCode, profile, {
+      isReconnect: Boolean(options.isReconnect),
+      preserveSnapshot: Boolean(options.preserveSnapshot),
+      sessionId
+    });
   } catch (error) {
     clearJoinAttemptState();
     showToast("連線工具沒載到，再滑一次就好。");
   }
 }
 
-function createPlayerPeer(roomCode, profile) {
+function createPlayerPeer(roomCode, profile, options = {}) {
   const peerId = `happy-party-player-${randomId(12)}`;
-  const peer = new Peer(peerId);
+  const peer = createPeerClient(peerId);
   let initialized = false;
+  const preservedSnapshot = options.preserveSnapshot ? APP.playerSnapshot : null;
+  const sessionId = getOrCreatePlayerSessionId(roomCode, options.sessionId || APP.playerSessionId);
   rememberPlayerProfile(profile);
+  APP.playerSessionId = sessionId;
+  APP.peer = peer;
+  APP.role = "player";
+  APP.roomCode = roomCode;
+  APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
+  const openTimer = setTimeout(() => {
+    if (initialized || APP.peer !== peer) {
+      return;
+    }
+    try {
+      peer.destroy();
+    } catch (error) {
+      // The reconnect loop below will replace this peer object.
+    }
+    schedulePlayerReconnect("手機連線等太久了，我換一條路再接一次。");
+  }, PEER_OPEN_TIMEOUT_MS);
 
   peer.on("open", (id) => {
     if (initialized) {
@@ -1303,16 +1506,20 @@ function createPlayerPeer(roomCode, profile) {
       return;
     }
     initialized = true;
-    APP.role = "player";
+    clearTimeout(openTimer);
     APP.peer = peer;
     APP.selfId = id;
-    APP.roomCode = roomCode;
-    APP.hostPeerId = `${HOST_PEER_PREFIX}${roomCode}`;
-    APP.playerSnapshot = null;
-    APP.playerReconnectAttempts = 0;
-    APP.playerReconnectActive = false;
-    renderJoiningLobby(profile, roomCode, "潛入中");
-    wirePlayerPeer(profile, { isReconnect: false });
+    APP.playerSnapshot = preservedSnapshot;
+    if (!options.isReconnect) {
+      APP.playerReconnectAttempts = 0;
+      APP.playerReconnectActive = false;
+    }
+    if (APP.playerSnapshot) {
+      renderPlayerSnapshot();
+    } else {
+      renderJoiningLobby(profile, roomCode, options.isReconnect ? "接回座位中" : "潛入中");
+    }
+    wirePlayerPeer(profile, { isReconnect: Boolean(options.isReconnect) });
   });
 
   peer.on("disconnected", () => {
@@ -1332,6 +1539,7 @@ function createPlayerPeer(roomCode, profile) {
   });
 
   peer.on("error", (error) => {
+    clearTimeout(openTimer);
     const errorType = error?.type || error?.message || "unknown";
     if (
       APP.peer === peer
@@ -1359,7 +1567,21 @@ function wirePlayerPeer(profile, options = {}) {
     return;
   }
 
-  const conn = APP.peer.connect(APP.hostPeerId, { reliable: true });
+  if (APP.hostConn) {
+    const pendingConn = APP.hostConn;
+    APP.hostConn = null;
+    try {
+      pendingConn.close();
+    } catch (error) {
+      // A fresh channel is created below even if the pending channel cannot close cleanly.
+    }
+  }
+
+  const conn = APP.peer.connect(APP.hostPeerId, {
+    reliable: true,
+    serialization: "json",
+    metadata: { sessionId: APP.playerSessionId }
+  });
   APP.hostConn = conn;
   APP.lastHostPacketAt = Date.now();
   startJoinAttemptTimeout();
@@ -1376,6 +1598,7 @@ function wirePlayerPeer(profile, options = {}) {
       payload: {
         name: profile.name,
         avatar: profile.avatar,
+        sessionId: APP.playerSessionId,
         reconnecting: Boolean(options.isReconnect)
       }
     });
@@ -1403,21 +1626,28 @@ function handleHostMessage(conn, packet) {
       return;
     }
 
-    const playerId = conn.peer;
-    const existingPlayer = room.players[playerId];
+    const requestedSessionId = sanitizePlayerSessionId(
+      packet.payload?.sessionId || conn.metadata?.sessionId
+    );
+    const directPlayer = room.players[conn.peer] || null;
+    if (
+      directPlayer?.sessionId
+      && requestedSessionId
+      && directPlayer.sessionId !== requestedSessionId
+    ) {
+      conn.send({ type: "join-rejected", reason: "這個座位的手機憑證對不上，重新掃一次 QR Code。" });
+      conn.close();
+      return;
+    }
+
+    const existingPlayer = findPlayerBySessionId(room, requestedSessionId) || directPlayer;
     if (existingPlayer) {
-      const existingConn = APP.hostConnections.get(playerId);
-      if (existingConn && existingConn !== conn) {
-        try {
-          existingConn.close();
-        } catch (error) {
-          // Ignore reconnect cleanup errors.
-        }
-      }
+      const playerId = existingPlayer.id;
       clearHostDisconnectTimer(playerId);
-      APP.hostConnections.set(playerId, conn);
+      bindHostConnection(playerId, conn);
       APP.lastSentSnapshotKeys.delete(playerId);
       existingPlayer.online = true;
+      existingPlayer.sessionId = requestedSessionId || existingPlayer.sessionId;
       existingPlayer.name = sanitizeName(packet.payload?.name || existingPlayer.name);
       existingPlayer.avatar = sanitizeAvatar(packet.payload?.avatar || existingPlayer.avatar);
       hostSyncAll({ immediate: true });
@@ -1430,20 +1660,21 @@ function handleHostMessage(conn, packet) {
       return;
     }
 
-    const currentCount = activeLobbyPlayers(room).length;
-    if (currentCount >= GAME_CONFIG.maxPlayers) {
+    const occupiedSeats = Object.keys(room.players).length;
+    if (occupiedSeats >= GAME_CONFIG.maxPlayers) {
       conn.send({ type: "join-rejected", reason: "包廂爆滿啦，真的塞不下。" });
       conn.close();
       return;
     }
 
-    APP.hostConnections.set(playerId, conn);
+    const playerId = conn.peer;
+    bindHostConnection(playerId, conn);
     room.players[playerId] = createPlayerState(playerId, packet.payload || {}, false);
     hostSyncAll({ immediate: true });
     return;
   }
 
-  const playerId = conn.peer;
+  const playerId = getHostConnectionPlayerId(conn);
   if (!APP.hostRoom || !APP.hostRoom.players[playerId]) {
     return;
   }
@@ -1466,6 +1697,9 @@ function handleHostMessage(conn, packet) {
 function handleHostDisconnect(playerId, conn = null) {
   const room = APP.hostRoom;
   const activeConn = APP.hostConnections.get(playerId);
+  if (conn) {
+    APP.hostConnectionPlayerIds.delete(conn);
+  }
   if (conn && activeConn && activeConn !== conn) {
     return;
   }
@@ -1798,22 +2032,36 @@ function renderSnapshot(snapshot) {
 function renderLobby(snapshot) {
   const isHostLobby = snapshot.role === "host";
   const isTestLobby = Boolean(snapshot.testMode);
+  const onlinePlayers = snapshot.players.filter((player) => player.online);
+  const onlineCount = onlinePlayers.length;
+  const offlineCount = snapshot.players.length - onlineCount;
+  const playersNeeded = Math.max(0, GAME_CONFIG.minPlayers - onlineCount);
   APP.dom.lobbyScreen.classList.toggle("host-lobby", isHostLobby);
   APP.dom.lobbyScreen.classList.toggle("player-lobby", !isHostLobby);
   APP.dom.lobbyScreen.classList.toggle("test-lobby", isTestLobby);
   APP.dom.lobbyEyebrow.textContent = isTestLobby ? "測試遊玩" : "正式遊玩";
   APP.dom.lobbyTitle.textContent = isTestLobby
     ? (isHostLobby ? "分身到齊，隨時可以開始" : "你進到測試桌了")
-    : (isHostLobby ? "掃碼上牆，人齊就開喝" : "你上大螢幕了！");
+    : (isHostLobby ? "掃碼加入，名字立刻上牆" : "你已經連上主持人");
   APP.dom.phasePill.textContent = isHostLobby
-    ? `${snapshot.players.length} 人已上線`
-    : (isTestLobby ? "等測試主揪發車" : "等主揪發車");
+    ? `${onlineCount} 人在線`
+    : (isTestLobby ? "等測試主揪發車" : "名字已上牆");
   APP.dom.roomCodeDisplay.textContent = snapshot.roomCode;
   APP.dom.joinLinkDisplay.textContent = snapshot.joinLink;
-  APP.dom.playerCountDisplay.textContent = String(snapshot.players.length);
+  APP.dom.playerCountDisplay.textContent = String(onlineCount);
   APP.dom.startGameBtn.disabled = !snapshot.canStart;
-  APP.dom.startGameBtn.textContent = isTestLobby ? "開始單人測試" : "人齊就開喝";
+  APP.dom.startGameBtn.textContent = isTestLobby
+    ? "開始單人測試"
+    : (playersNeeded ? `再等 ${playersNeeded} 人` : "人齊，開始遊戲");
   APP.dom.hostControls.classList.toggle("hidden", snapshot.role !== "host");
+
+  if (isHostLobby) {
+    APP.dom.playerWallStatus.textContent = offlineCount
+      ? `${onlineCount} 人在線，${offlineCount} 人正在接回來。`
+      : (playersNeeded ? `手機連上就會立刻出現，還差 ${playersNeeded} 人可以開始。` : "人數到齊，所有手機都在線。");
+  } else {
+    APP.dom.playerWallStatus.textContent = "你的名字已經出現在主持畫面上。";
+  }
 
   if (snapshot.role === "host") {
     APP.dom.qrWrap.classList.remove("hidden");
@@ -1823,14 +2071,22 @@ function renderLobby(snapshot) {
   }
 
   const previousPlayerIds = APP.lobbyPlayerIds;
+  const previousOnlinePlayerIds = APP.lobbyOnlinePlayerIds;
   const currentPlayerIds = new Set(snapshot.players.map((player) => player.id));
+  const currentOnlinePlayerIds = new Set(onlinePlayers.map((player) => player.id));
   const fragment = document.createDocumentFragment();
   snapshot.players.forEach((player) => {
     const identityLabel = player.isHost ? "主揪" : player.isBot ? "分身" : "玩家";
-    const statusLabel = player.online ? (player.isBot ? "待命中" : "已卡位") : "斷線中";
+    const justRejoined = isHostLobby
+      && player.online
+      && previousPlayerIds.has(player.id)
+      && !previousOnlinePlayerIds.has(player.id);
+    const statusLabel = justRejoined
+      ? "重新連上"
+      : player.online ? (player.isBot ? "待命中" : "連線成功") : "正在接回來";
     const row = document.createElement("article");
     const justJoined = isHostLobby && previousPlayerIds.size > 0 && !previousPlayerIds.has(player.id);
-    row.className = `player-row${isHostLobby ? " player-tile" : ""}${player.online ? "" : " offline"}${justJoined ? " just-joined" : ""}`;
+    row.className = `player-row${isHostLobby ? " player-tile" : ""}${player.online ? "" : " offline"}${justJoined ? " just-joined" : ""}${justRejoined ? " just-rejoined" : ""}`;
     row.innerHTML = `
       <div class="player-avatar">${player.avatar}</div>
       <div class="player-meta">
@@ -1843,6 +2099,7 @@ function renderLobby(snapshot) {
   });
   APP.dom.playerList.replaceChildren(fragment);
   APP.lobbyPlayerIds = currentPlayerIds;
+  APP.lobbyOnlinePlayerIds = currentOnlinePlayerIds;
 }
 
 function renderQrCanvas(target, link, width = 180) {
@@ -3910,6 +4167,8 @@ function resetTransientUiState() {
   APP.activeScreenId = null;
   APP.renderSignature = "";
   APP.lastSentSnapshotKeys.clear();
+  APP.lobbyPlayerIds.clear();
+  APP.lobbyOnlinePlayerIds.clear();
   APP.testViewPlayerId = "";
   APP.testCarrierPreviewActive = false;
   APP.lastToast.message = "";
@@ -4000,6 +4259,7 @@ function destroyPeerState() {
     }
   });
   APP.hostConnections.clear();
+  APP.hostConnectionPlayerIds.clear();
   if (APP.hostConn) {
     try {
       APP.hostConn.close();
@@ -4023,6 +4283,7 @@ function destroyPeerState() {
   APP.selfId = "";
   APP.roomCode = "";
   APP.hostPeerId = "";
+  APP.playerSessionId = "";
   APP.hostDeadlineTimer = null;
   APP.hostIntervalTimer = null;
   APP.playerWatchdogTimer = null;
