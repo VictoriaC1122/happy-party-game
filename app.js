@@ -854,8 +854,8 @@ function syncTestLab() {
   APP.dom.testAdvanceBtn.classList.toggle("hidden", !(room.phase === "summary" && !viewer?.isHost));
   APP.dom.testAdvanceBtn.textContent = room.roundIndex >= room.roundCount ? "直接開獎去" : "下一局，走起";
   APP.dom.testLabHint.textContent = viewer?.isHost
-    ? "主揪顧全桌；想自己出牌，挑個分身接手。"
-    : `${viewer?.name || "這位分身"} 交給你，出牌、偷測、跑醫院都算他的。`;
+    ? "選一位玩家切換視角。"
+    : `目前視角：${viewer?.name || "這位玩家"}`;
   APP.dom.testCarrierPanel.classList.toggle("hidden", !carrierPreview);
   if (carrierPreview) {
     APP.dom.testCarrierAvatar.textContent = carrierPreview.avatar;
