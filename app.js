@@ -3,6 +3,11 @@ const CONSENT_KEY = "happy-party-consent-v1";
 const PLAYER_SESSIONS_KEY = "happy-party-player-sessions-v1";
 const HOST_PEER_PREFIX = "happy-party-host-";
 const PUBLIC_JOIN_BASE = "https://victoriac1122.github.io/happy-party-game/";
+const EVENT_WIFI = Object.freeze({
+  ssid: "LIFT_5G",
+  password: "27760296",
+  security: "WPA"
+});
 const HOST_HEARTBEAT_MS = 5000;
 const LOBBY_DISCONNECT_GRACE_MS = 90000;
 const PLAYER_CONNECTION_STALE_MS = 40000;
@@ -376,6 +381,8 @@ function cacheDom() {
     phasePill: document.getElementById("phase-pill"),
     roomCodeDisplay: document.getElementById("room-code-display"),
     joinLinkDisplay: document.getElementById("join-link-display"),
+    lobbyQrStage: document.getElementById("lobby-qr-stage"),
+    wifiQrCode: document.getElementById("wifi-qr-code"),
     qrWrap: document.getElementById("qr-wrap"),
     qrCode: document.getElementById("qr-code"),
     copyLinkBtn: document.getElementById("copy-link-btn"),
@@ -2256,6 +2263,14 @@ function buildJoinLink(roomCode) {
   return base.toString();
 }
 
+function escapeWifiQrValue(value) {
+  return String(value || "").replace(/([\\;,\":])/g, "\\$1");
+}
+
+function buildWifiQrPayload({ ssid, password, security }) {
+  return `WIFI:T:${escapeWifiQrValue(security)};S:${escapeWifiQrValue(ssid)};P:${escapeWifiQrValue(password)};H:false;;`;
+}
+
 function buildPartnerView(playerId, partnerId) {
   const room = APP.hostRoom;
   const partner = room.players[partnerId];
@@ -2458,10 +2473,11 @@ function renderLobby(snapshot) {
   }
 
   if (snapshot.role === "host") {
-    APP.dom.qrWrap.classList.remove("hidden");
-    renderQrCode(snapshot.joinLink, 220);
+    APP.dom.lobbyQrStage.classList.remove("hidden");
+    renderQrCanvas(APP.dom.wifiQrCode, buildWifiQrPayload(EVENT_WIFI), 190);
+    renderQrCode(snapshot.joinLink, 190);
   } else {
-    APP.dom.qrWrap.classList.add("hidden");
+    APP.dom.lobbyQrStage.classList.add("hidden");
   }
 
   const previousPlayerIds = APP.lobbyPlayerIds;
@@ -2554,8 +2570,8 @@ function renderQrCanvas(target, link, width = 180) {
   }
 }
 
-function renderQrCode(link) {
-  renderQrCanvas(APP.dom.qrCode, link, 180);
+function renderQrCode(link, width = 180) {
+  renderQrCanvas(APP.dom.qrCode, link, width);
 }
 
 function renderRound(snapshot) {

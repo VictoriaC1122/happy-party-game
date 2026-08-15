@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260815h">
+  <link rel="stylesheet" href="./styles.css?v=20260815i">
   <script defer src="./data.js?v=20260815d"></script>
-  <script defer src="./app.js?v=20260815p"></script>
+  <script defer src="./app.js?v=20260815q"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -266,9 +266,26 @@
             <span>加入連結</span>
             <strong id="join-link-display">主揪開桌後就會冒出來</strong>
           </div>
-          <div id="qr-wrap" class="qr-wrap hidden">
-            <div id="qr-code"></div>
-            <p>掃一下就滑進來</p>
+          <div id="lobby-qr-stage" class="lobby-qr-stage hidden">
+            <div class="qr-wrap wifi-qr-wrap">
+              <span class="qr-step">1</span>
+              <div class="qr-heading">
+                <strong>先連現場 Wi-Fi</strong>
+                <span>LIFT_5G</span>
+              </div>
+              <div id="wifi-qr-code" aria-label="連接 LIFT_5G 的 Wi-Fi QR Code"></div>
+              <p>掃完按「加入網路」</p>
+              <small>密碼 <strong>27760296</strong></small>
+            </div>
+            <div id="qr-wrap" class="qr-wrap">
+              <span class="qr-step">2</span>
+              <div class="qr-heading">
+                <strong>再進遊戲</strong>
+                <span>名字會立刻上牆</span>
+              </div>
+              <div id="qr-code" aria-label="加入遊戲的 QR Code"></div>
+              <p>掃一下就滑進來</p>
+            </div>
           </div>
           <div class="actions-row" id="host-controls">
             <button id="copy-link-btn" class="secondary-btn">複製進場連結</button>

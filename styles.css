@@ -809,7 +809,7 @@ select {
 
 .host-lobby .lobby-access-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(470px, 1.2fr);
   grid-template-areas:
     "title qr"
     "room qr"
@@ -834,20 +834,32 @@ select {
 .host-lobby .room-code-pair strong {
   color: #855463;
   font-family: "DM Sans", "Chiron Hei HK", sans-serif;
-  font-size: clamp(2.8rem, 7vw, 5.8rem);
+  font-size: clamp(2.8rem, 5vw, 4.6rem);
   letter-spacing: 0.08em;
   line-height: 1;
   text-align: left;
+  white-space: nowrap;
 }
 
 .host-lobby .join-link-pair {
   grid-area: link;
 }
 
-.host-lobby .qr-wrap {
+.host-lobby .lobby-qr-stage {
   grid-area: qr;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.host-lobby .lobby-qr-stage.hidden {
+  display: none;
+}
+
+.host-lobby .qr-wrap {
   margin: 0;
-  min-width: 274px;
+  min-width: 0;
+  align-content: start;
 }
 
 .host-lobby #host-controls {
@@ -873,6 +885,7 @@ select {
 }
 
 .qr-wrap {
+  position: relative;
   margin: 16px 0;
   display: grid;
   place-items: center;
@@ -881,6 +894,58 @@ select {
   border-radius: 18px;
   background: rgba(255,255,255,0.6);
   border: 1px solid rgba(116, 82, 92, 0.1);
+}
+
+.qr-step {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fffafd;
+  background: #9f6675;
+  font-weight: 900;
+}
+
+.qr-heading {
+  display: grid;
+  gap: 2px;
+  min-height: 50px;
+  padding: 0 28px;
+  text-align: center;
+}
+
+.qr-heading strong {
+  color: #664c54;
+  font-size: 1.05rem;
+}
+
+.qr-heading span,
+.qr-wrap small {
+  color: var(--muted);
+}
+
+.qr-wrap p,
+.qr-wrap small {
+  margin: 0;
+}
+
+.qr-wrap small strong {
+  color: #875565;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+}
+
+.wifi-qr-wrap {
+  background: linear-gradient(180deg, rgba(231, 240, 237, 0.9), rgba(255, 255, 255, 0.68));
+  border-color: rgba(94, 123, 116, 0.22);
+}
+
+.wifi-qr-wrap .qr-step {
+  background: #66837d;
 }
 
 .qr-wrap.hidden {
@@ -899,7 +964,9 @@ select {
 }
 
 #qr-code canvas,
-#qr-code img {
+#qr-code img,
+#wifi-qr-code canvas,
+#wifi-qr-code img {
   background: #fffafd;
   border-radius: 18px;
   padding: 12px;
@@ -1905,6 +1972,10 @@ body.event-modal-open {
       "link"
       "controls";
     gap: 12px;
+  }
+
+  .host-lobby .lobby-qr-stage {
+    grid-template-columns: 1fr;
   }
 
   .host-lobby .qr-wrap {
