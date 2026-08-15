@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>快樂酒局派對遊戲</title>
   <meta name="description" content="40 人同桌、10 Round 隨機配對，感染狀態全程藏著走的酒局派對遊戲。">
-  <link rel="stylesheet" href="./styles.css?v=20260815g">
+  <link rel="stylesheet" href="./styles.css?v=20260815h">
   <script defer src="./data.js?v=20260815d"></script>
-  <script defer src="./app.js?v=20260815n"></script>
+  <script defer src="./app.js?v=20260815o"></script>
 </head>
 <body>
   <div class="backdrop"></div>
@@ -65,7 +65,7 @@
               <div><span>已傳播</span><strong id="test-carrier-transmissions">0 次</strong></div>
               <div><span>親密互動</span><strong id="test-carrier-intimacy">0 次</strong></div>
             </div>
-            <p class="carrier-test-mission">全隊直傳 6 人、感染鏈再拐中 15 人，或讓有下場的人全中標，6 位帶原者就一起登台。</p>
+            <p class="carrier-test-mission">你親自感染的人算「直傳」；他們再傳給別人，就會接到你的「感染鏈」。全隊直傳 6 人、感染鏈 15 人，或讓有下場的人全部感染，任一項達成就全隊贏。</p>
           </article>
         </article>
 
@@ -110,7 +110,8 @@
               <li>開局暗抽 6 位帶原者，只有帶原者本人會收到自己的答案。</li>
               <li>10 Round 隨機換人，每局 45 秒。</li>
               <li>整晚完全沒親密互動，直接頒你「來觀光」。</li>
-              <li>終局只留 6 席；帶原者全隊直傳 6 人、感染鏈間接感染 15 人，或有下場的人全中標，就一起贏。</li>
+              <li>帶原者親自感染的人算直傳；被感染的人再傳出去，就算感染鏈。</li>
+              <li>全隊直傳 6 人、感染鏈 15 人，或有下場的人全部感染，任一項達成，6 位初始帶原者就一起贏。</li>
             </ul>
           </article>
         </div>
@@ -208,7 +209,8 @@
               <h4>怎麼贏</h4>
               <ul>
                 <li>每人至少要有 <strong>1 次親密互動</strong>，否則直接出局。</li>
-                <li>帶原陣營只要全隊直傳 <strong>6 人</strong>、間接感染 <strong>15 人</strong>，或讓有下場的人全中標，6 位帶原者一起贏。</li>
+                <li>你親自感染的人算<strong>直傳</strong>；被你感染的人再傳出去，就接到你的<strong>感染鏈</strong>。</li>
+                <li>全隊直傳 <strong>6 人</strong>、感染鏈 <strong>15 人</strong>，或讓有下場的人全部感染，任一項達成就全隊贏。</li>
                 <li>帶原陣營沒過關，就由健康者優先，再按生存分補滿 <strong>6 席</strong>。</li>
                 <li>感染後不會出局，還能繼續往下傳。</li>
               </ul>
@@ -309,7 +311,8 @@
               <h4>怎麼贏</h4>
               <ul>
                 <li>整晚至少要有 <strong>1 次親密互動</strong>，否則直接出局。</li>
-                <li>帶原陣營全隊直傳 <strong>6 人</strong>、間接感染 <strong>15 人</strong>，或讓有下場的人全中標，6 位帶原者一起贏。</li>
+                <li>帶原者親自感染的人算直傳；他們再傳給別人，就接到這位帶原者的感染鏈。</li>
+                <li>全隊直傳 <strong>6 人</strong>、感染鏈 <strong>15 人</strong>，或讓有下場的人全部感染，任一項達成就全隊贏。</li>
                 <li>帶原陣營沒過關，就由健康者優先，再按生存分補滿 <strong>6 席</strong>。</li>
               </ul>
             </section>
@@ -344,9 +347,9 @@
       <div id="carrier-mission-banner" class="carrier-mission-banner hidden">
         <div>
           <span>🦠 遊戲陣營：帶原者</span>
-          <strong>直傳 6 人或感染鏈拐中 15 人，全隊就贏</strong>
+          <strong>你親自感染算直傳；對方再傳出去，就接上你的感染鏈</strong>
         </div>
-        <span id="carrier-mission-progress" class="carrier-mission-progress">全隊直傳 0 / 6 · 感染鏈 0 / 15</span>
+        <span id="carrier-mission-progress" class="carrier-mission-progress">全隊直傳 0 / 6 · 全隊感染鏈 0 / 15</span>
       </div>
 
       <div class="stats-grid">
@@ -442,6 +445,16 @@
         <p id="finale-body">獎牌還在飛過來。</p>
       </article>
       <div id="podium-stage" class="podium-stage"></div>
+      <article id="carrier-spread-replay-panel" class="panel inset-panel carrier-spread-replay hidden">
+        <div class="panel-head compact-head">
+          <div>
+            <p class="eyebrow">帶原者私人帳本</p>
+            <h3 id="carrier-spread-replay-heading">你的病毒今晚去了哪裡</h3>
+          </div>
+        </div>
+        <p id="carrier-spread-replay-summary" class="carrier-spread-summary"></p>
+        <div id="carrier-spread-replay-list" class="carrier-spread-list"></div>
+      </article>
       <article id="replay-panel" class="panel inset-panel hidden">
         <div class="panel-head compact-head">
           <div>

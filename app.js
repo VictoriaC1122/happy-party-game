@@ -359,6 +359,10 @@ function cacheDom() {
     finaleHeading: document.getElementById("finale-heading"),
     finaleBody: document.getElementById("finale-body"),
     podiumStage: document.getElementById("podium-stage"),
+    carrierSpreadReplayPanel: document.getElementById("carrier-spread-replay-panel"),
+    carrierSpreadReplayHeading: document.getElementById("carrier-spread-replay-heading"),
+    carrierSpreadReplaySummary: document.getElementById("carrier-spread-replay-summary"),
+    carrierSpreadReplayList: document.getElementById("carrier-spread-replay-list"),
     replayPanel: document.getElementById("replay-panel"),
     replayHeading: document.getElementById("replay-heading"),
     replayList: document.getElementById("replay-list"),
@@ -1953,6 +1957,7 @@ function buildSnapshotForPlayer(playerId, sharedContext = null) {
       podium: room.finale.podium,
       awards: room.finale.awards,
       selfResult: room.finalResults[playerId],
+      carrierSpreadReplay: me.isCarrier ? buildCarrierSpreadReplay(room, playerId) : null,
       replayRounds: buildReplayRoundsForPlayer(room, playerId)
     };
   }
@@ -2023,6 +2028,78 @@ function buildReplayRoundsForPlayer(room, playerId) {
       };
     })
     .filter(Boolean);
+}
+
+function buildInfectionPath(playerById, targetPlayer) {
+  const path = [targetPlayer];
+  const visited = new Set([targetPlayer.id]);
+  let current = targetPlayer;
+
+  while (current?.infectionSourceId && current.infectionSourceId !== current.id) {
+    const source = playerById.get(current.infectionSourceId);
+    if (!source || visited.has(source.id)) {
+      break;
+    }
+    path.unshift(source);
+    visited.add(source.id);
+    if (source.isCarrier) {
+      break;
+    }
+    current = source;
+  }
+  return path;
+}
+
+function buildCarrierSpreadReplay(room, carrierId) {
+  const players = getGamePlayerIds(room)
+    .map((playerId) => room.players[playerId])
+    .filter(Boolean);
+  const carrier = room.players[carrierId];
+  if (!carrier?.isCarrier) {
+    return null;
+  }
+
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  const events = players
+    .filter((target) => !target.isCarrier && target.isInfected && target.infectionSourceId)
+    .map((target) => {
+      const source = playerById.get(target.infectionSourceId);
+      const path = buildInfectionPath(playerById, target);
+      if (!source || path[0]?.id !== carrierId) {
+        return null;
+      }
+      const direct = source.id === carrierId;
+      return {
+        roundIndex: target.infectionRound,
+        direct,
+        chainDepth: Math.max(1, path.length - 1),
+        source: {
+          id: source.id,
+          name: source.name,
+          avatar: source.avatar
+        },
+        target: {
+          id: target.id,
+          name: target.name,
+          avatar: target.avatar
+        },
+        path: path.map((player) => ({
+          id: player.id,
+          name: player.id === carrierId ? "你" : player.name,
+          avatar: player.avatar
+        }))
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => (left.roundIndex || 0) - (right.roundIndex || 0)
+      || left.chainDepth - right.chainDepth
+      || left.target.name.localeCompare(right.target.name, "zh-Hant"));
+
+  return {
+    directCount: events.filter((event) => event.direct).length,
+    indirectCount: events.filter((event) => !event.direct).length,
+    events
+  };
 }
 
 function fallbackSummary() {
@@ -2230,7 +2307,7 @@ function renderRound(snapshot) {
     const pressure = successes < GAME_CONFIG.carrierCondomLockMinimumRawSex
       ? `你再 ${GAME_CONFIG.carrierCondomLockMinimumRawSex - successes} 次無套開始鎖套`
       : `你的鎖套率 ${chancePercent}%`;
-    APP.dom.carrierMissionProgress.textContent = `全隊直傳 ${mission.directInfections} / ${mission.directGoal} · 感染鏈 ${mission.indirectInfections} / ${mission.indirectGoal} · ${pressure}`;
+    APP.dom.carrierMissionProgress.textContent = `全隊直傳 ${mission.directInfections} / ${mission.directGoal} · 全隊感染鏈 ${mission.indirectInfections} / ${mission.indirectGoal} · ${pressure}`;
   }
   APP.dom.dissatisfactionValue.textContent = `${self.dissatisfaction}%`;
   APP.dom.healthAnxietyValue.textContent = `${self.healthAnxiety}%`;
@@ -2446,6 +2523,7 @@ function renderAwards(snapshot) {
     awardsFragment.appendChild(row);
   });
   APP.dom.awardsList.replaceChildren(awardsFragment);
+  renderCarrierSpreadReplay(snapshot);
 
   if (!APP.dom.replayPanel || !APP.dom.replayHeading || !APP.dom.replayList) {
     return;
@@ -2503,6 +2581,66 @@ function renderAwards(snapshot) {
     replayFragment.appendChild(card);
   });
   APP.dom.replayList.replaceChildren(replayFragment);
+}
+
+function renderCarrierSpreadReplay(snapshot) {
+  const panel = APP.dom.carrierSpreadReplayPanel;
+  const spreadReplay = snapshot.finale.carrierSpreadReplay;
+  if (!panel || !APP.dom.carrierSpreadReplayList) {
+    return;
+  }
+
+  panel.classList.toggle("hidden", !spreadReplay);
+  if (!spreadReplay) {
+    APP.dom.carrierSpreadReplayList.replaceChildren();
+    return;
+  }
+
+  APP.dom.carrierSpreadReplayHeading.textContent = `${snapshot.self.name} 的病毒今晚去了哪裡`;
+  APP.dom.carrierSpreadReplaySummary.textContent = spreadReplay.events.length
+    ? `你親自感染 ${spreadReplay.directCount} 人；順著你這條病毒鏈，後面又接力感染 ${spreadReplay.indirectCount} 人。`
+    : "你這條病毒鏈今晚沒有傳出去。";
+
+  const fragment = document.createDocumentFragment();
+  if (!spreadReplay.events.length) {
+    const emptyCard = document.createElement("article");
+    emptyCard.className = "carrier-spread-empty";
+    emptyCard.textContent = "0 次直傳，也沒有人拿著你的病毒往下傳。";
+    fragment.appendChild(emptyCard);
+  }
+
+  spreadReplay.events.forEach((event) => {
+    const card = document.createElement("article");
+    card.className = `carrier-spread-card ${event.direct ? "direct" : "indirect"}`;
+    const playerChip = (player) => `
+        <span class="carrier-route-person">
+          <span>${escapeHtml(player.avatar)}</span>
+          <b>${escapeHtml(player.name)}</b>
+        </span>
+      `;
+    const route = event.path.length
+      ? `${playerChip(event.path[0])}${event.path.slice(1).map((player) => `
+          <span class="carrier-route-step">
+            <span class="carrier-route-arrow">→</span>
+            ${playerChip(player)}
+          </span>
+        `).join("")}`
+      : "";
+    const eventCopy = event.direct
+      ? `第 ${event.roundIndex} 晚，你親自感染了 ${event.target.name}。`
+      : `第 ${event.roundIndex} 晚，${event.source.name} 用你這條病毒鏈再感染 ${event.target.name}。`;
+
+    card.innerHTML = `
+      <div class="carrier-spread-topline">
+        <strong>第 ${event.roundIndex} 晚</strong>
+        <span class="phase-pill ${event.direct ? "warm" : "subtle"}">${event.direct ? "你直接傳出去" : `感染鏈第 ${event.chainDepth} 棒`}</span>
+      </div>
+      <div class="carrier-route">${route}</div>
+      <p>${escapeHtml(eventCopy)}</p>
+    `;
+    fragment.appendChild(card);
+  });
+  APP.dom.carrierSpreadReplayList.replaceChildren(fragment);
 }
 
 function copyJoinLink() {
@@ -2804,7 +2942,7 @@ function buildCarrierMissionModals(player, roundIndex, playerId) {
     icon: "🦠",
     kicker: "你的隱藏身分",
     title: "你是初始帶原者",
-    body: "你是今晚 6 位帶原者之一。全隊直傳 6 人、讓後來感染的人再拐中 15 人，或把有下場的人全送進感染名單，6 人就一起贏。你無套性交成功 2 次後，遇到你的人開始抽 25% 鎖套，最高 70%。"
+    body: "你是今晚 6 位初始帶原者之一。你親自感染的人算直傳；被你感染的人再傳出去，就會接到你的感染鏈。全隊直傳 6 人、感染鏈 15 人，或讓有下場的人全部感染，任一項達成就全隊贏。你無套性交成功 2 次後，遇到你的人開始抽 25% 鎖套，最高 70%。"
   }];
 }
 
