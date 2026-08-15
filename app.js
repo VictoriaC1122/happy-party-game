@@ -247,6 +247,7 @@ function cacheDom() {
   APP.dom = {
     screens: Array.from(document.querySelectorAll(".screen")),
     testLabPanel: document.getElementById("test-lab-panel"),
+    testExitBtn: document.getElementById("test-exit-btn"),
     testLabPill: document.getElementById("test-lab-pill"),
     testViewSelect: document.getElementById("test-view-select"),
     testHostViewBtn: document.getElementById("test-host-view-btn"),
@@ -357,6 +358,7 @@ function bindDomEvents() {
 
   APP.dom.createRoomBtn.addEventListener("click", () => handleCreateRoom(false));
   APP.dom.createTestRoomBtn.addEventListener("click", () => handleCreateRoom(true));
+  APP.dom.testExitBtn.addEventListener("click", exitTestMode);
   APP.dom.joinForm.addEventListener("submit", handleJoinSubmit);
   APP.dom.copyLinkBtn.addEventListener("click", copyJoinLink);
   APP.dom.startGameBtn.addEventListener("click", startHostedGame);
@@ -881,6 +883,7 @@ function syncTestLab() {
   const room = APP.hostRoom;
   const visible = APP.role === "host" && Boolean(room?.testMode);
   APP.dom.testLabPanel.classList.toggle("hidden", !visible);
+  APP.dom.testExitBtn.classList.toggle("hidden", !visible);
   if (!visible || !room) {
     return;
   }
@@ -3967,6 +3970,16 @@ function escapeHtml(value) {
 
 function restartApp() {
   window.location.href = `${window.location.pathname}`;
+}
+
+function exitTestMode() {
+  if (APP.role !== "host" || !APP.hostRoom?.testMode) {
+    return;
+  }
+  destroyPeerState();
+  setCreateRoomBusy(false);
+  switchScreen("mode-screen");
+  showToast("測試收好，回主畫面啦。");
 }
 
 function destroyPeerState() {

@@ -513,6 +513,33 @@ select {
   min-width: 170px;
 }
 
+.test-exit-btn {
+  position: fixed;
+  z-index: 120;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(115, 70, 82, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 248, 249, 0.92);
+  box-shadow: 0 12px 30px rgba(85, 50, 60, 0.18);
+  color: #754b58;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.test-exit-btn:hover {
+  transform: translateY(-1px);
+  background: #fffafa;
+}
+
+.test-exit-btn:focus-visible {
+  outline: 3px solid rgba(169, 111, 126, 0.3);
+  outline-offset: 3px;
+}
+
 .test-lab {
   display: grid;
   gap: 16px;
